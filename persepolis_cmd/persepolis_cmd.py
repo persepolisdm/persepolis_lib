@@ -73,7 +73,7 @@ if args.download_path:
     add_link_dictionary['download_path'] = "".join(args.download_path)
 
 if args.proxy_ip:
-    add_link_dictionary['ip'] = "".join(args.ip)
+    add_link_dictionary['ip'] = "".join(args.proxy_ip)
 
 if args.proxy_port:
     add_link_dictionary['port'] = "".join(args.proxy_port)

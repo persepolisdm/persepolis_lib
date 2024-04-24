@@ -23,19 +23,87 @@ import threading
 import os
 from requests.cookies import cookiejar_from_dict
 from http.cookies import SimpleCookie
+from time import sleep, time
+import sys
+
+global downloaded_size
+global finished_threads
+
+# this function converts file_size to KiB or MiB or GiB
+def humanReadableSize(size, input_type='file_size'): 
+    labels = ['KiB', 'MiB', 'GiB', 'TiB']
+    i = -1
+    if size < 1024:
+        return size , 'B'
+
+    while size >= 1024:
+        i += 1
+        size = size / 1024
+        
+    if input_type == 'speed':
+        j = 0
+    else:
+        j = 1
+
+    if i > j:
+        return round(size, 2), labels[i]
+    else:
+        return round(size, None), labels[i]
+
+def convertSize(size, unit):
+    if unit == 'B':
+        converted_size = size
+    elif unit == 'KiB':
+        converted_size = size / 1024
+    elif unit == 'MiB':
+        converted_size = size / 1024**2
+    elif unit == 'GiB':
+        converted_size = size / 1024**3
+    elif unit == 'TiB':
+        converted_size = size / 1024**4
+
+    return converted_size
+
+def progressBar(file_size, number_of_threads):
+    global downloaded_size
+    global finished_threads
+
+    size, unit = humanReadableSize(file_size)
+    percent = 0
+    end_time = time()
+    last_download_value = downloaded_size
+    while finished_threads != number_of_threads:
+        percent = (downloaded_size/file_size)*100 
+        bar_length = 100
+        converted_downloaded_size = convertSize(downloaded_size, unit)
+        download_status = str(round(converted_downloaded_size, 2)) + '|' + str(size) + ' ' + unit
+        filled_up_Length = int(round(bar_length* percent / float(100)))
+        bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
+        diffrence_time = time() - end_time
+        diffrence_size = downloaded_size - last_download_value
+        diffrence_size_converted, speed_unit = humanReadableSize(diffrence_size, 'speed')
+        download_speed = round(diffrence_size_converted / diffrence_time, 2)
+        download_speed_str = str(download_speed) + " " + speed_unit + "/s"
+        sys.stdout.write('[%s] %s%s ...%s, %s   \r' %(bar, int(percent), '%', download_status, download_speed_str))
+        sys.stdout.flush() 
+        end_time = time()
+        last_download_value = downloaded_size
+        sleep(0.5)
+
 
 # The below code is used for each chunk of file handled
 # by each thread for downloading the content from specified
 # location to storage
 def handler(start, end, link, file_path, requests_session):
 
+    global downloaded_size
+    global finished_threads
+
     # specify the starting and ending of the file
     chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
 
-    requests_session.headers.update(chunk_headers)
-
     # request the specified part and get into variable
-    r = requests_session.get(link, stream=True)
+    r = requests_session.get(link, headers=chunk_headers, allow_redirects=True, stream=True)
 
     # open the file and write the content of the html page
     # into file.
@@ -44,9 +112,20 @@ def handler(start, end, link, file_path, requests_session):
 
         fp.seek(start)
         fp.tell()
-        fp.write(r.content)
+
+        for data in r.iter_content(chunk_size=100):
+            fp.write(data)
+            downloaded_size = downloaded_size + 100
+
+
+#         fp.write(r.content)
+    finished_threads = finished_threads + 1
 
 def downloadFile(add_link_dictionary, number_of_threads): 
+    global downloaded_size
+    global finished_threads
+    downloaded_size = 0
+    finished_threads = 0
 
     link = add_link_dictionary['link']
     name = add_link_dictionary['out']
@@ -66,8 +145,6 @@ def downloadFile(add_link_dictionary, number_of_threads):
     
     # define a requests session
     requests_session = requests.Session()
-
-    requests_session.allow_redirects = True
 
 
     if ip:
@@ -98,7 +175,7 @@ def downloadFile(add_link_dictionary, number_of_threads):
         requests_session.headers.update({'user-agent': user_agent})  # setting user_agent to the session
 
 
-    response = requests.head(link) 
+    response = requests.head(link, allow_redirects=True) 
     file_header = response.headers
 
     # find file size
@@ -110,6 +187,9 @@ def downloadFile(add_link_dictionary, number_of_threads):
 
 
     # set file name
+    file_name = link.split('/')[-1] 
+
+
     if name: 
         file_name = name 
 
@@ -124,9 +204,6 @@ def downloadFile(add_link_dictionary, number_of_threads):
 
             # getting file name in desired format
             file_name = filename_splited.strip() 
-    else:
-        file_name = link.split('/')[-1] 
-
 
     # chunk file
     part = int(file_size) // number_of_threads
@@ -140,6 +217,12 @@ def downloadFile(add_link_dictionary, number_of_threads):
     fp = open(file_path, "wb")
     fp.write(b'\0' * file_size)
     fp.close()
+
+    progress_bar_thread = threading.Thread(target=progressBar,
+                         kwargs={'file_size': file_size,
+                                 'number_of_threads': number_of_threads})
+    progress_bar_thread.setDaemon(True)
+    progress_bar_thread.start()
 
 
     for i in range(number_of_threads):
