@@ -14,23 +14,28 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+# this script forked from 
+# https://www.geeksforgeeks.org/simple-multithreaded-download-manager-in-python/
+
+
 import requests
 import threading 
 import os
-
-# this script forked from 
-# https://www.geeksforgeeks.org/simple-multithreaded-download-manager-in-python/
+from requests.cookies import cookiejar_from_dict
+from http.cookies import SimpleCookie
 
 # The below code is used for each chunk of file handled
 # by each thread for downloading the content from specified
 # location to storage
-def handler(start, end, url, file_path):
+def handler(start, end, link, file_path, requests_session):
 
     # specify the starting and ending of the file
-    headers = {'Range': 'bytes=%d-%d' % (start, end)}
+    chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
+
+    requests_session.headers.update(chunk_headers)
 
     # request the specified part and get into variable
-    r = requests.get(url, headers=headers, stream=True, allow_redirects=True)
+    r = requests_session.get(link, stream=True)
 
     # open the file and write the content of the html page
     # into file.
@@ -46,13 +51,59 @@ def downloadFile(add_link_dictionary, number_of_threads):
     link = add_link_dictionary['link']
     name = add_link_dictionary['out']
     download_path = add_link_dictionary['download_path']
+    ip = add_link_dictionary['ip']
+    port = add_link_dictionary['port']
+    proxy_user = add_link_dictionary['proxy_user']
+    proxy_passwd = add_link_dictionary['proxy_passwd']
+    download_user = add_link_dictionary['download_user']
+    download_passwd = add_link_dictionary['download_passwd']
+    header = add_link_dictionary['header']
+    user_agent = add_link_dictionary['user_agent']
+    raw_cookies = add_link_dictionary['load_cookies']
+    referer = add_link_dictionary['referer']
+
     number_of_threads = int(number_of_threads)
     
-    response = requests.head(link, allow_redirects=True) 
-    header = response.headers
+    # define a requests session
+    requests_session = requests.Session()
+
+    requests_session.allow_redirects = True
+
+
+    if ip:
+        ip_port = 'http://' + str(ip) + ":" + str(port)
+        if proxy_user:
+            ip_port = 'http://' + proxy_user + ':' + proxy_passwd + '@' + ip_port
+        # set proxy to the session
+        requests_session.proxies = {'http': ip_port}
+
+    if download_user:
+        # set download user pass to the session
+        requests_session.auth = (download_user, download_passwd)
+
+    # set cookies
+    if raw_cookies:
+        cookie = SimpleCookie()
+        cookie.load(raw_cookies)
+
+        cookies = {key: morsel.value for key, morsel in cookie.items()}
+        requests_session.cookies = cookiejar_from_dict(cookies)
+
+    # set referer
+    if referer:
+        requests_session.headers.update({'referer': referer})  # setting referer to the session
+
+    # set user_agent
+    if user_agent:
+        requests_session.headers.update({'user-agent': user_agent})  # setting user_agent to the session
+
+
+    response = requests.head(link) 
+    file_header = response.headers
+
     # find file size
     try: 
-        file_size = int(response.headers['content-length']) 
+        file_size = int(file_header['content-length']) 
     except: 
         print("Invalid URL")
         return
@@ -62,9 +113,9 @@ def downloadFile(add_link_dictionary, number_of_threads):
     if name: 
         file_name = name 
 
-    elif 'Content-Disposition' in header.keys():  # checking if filename is available
+    elif 'Content-Disposition' in file_header.keys():  # checking if filename is available
 
-        content_disposition = header['Content-Disposition']
+        content_disposition = file_header['Content-Disposition']
 
         if content_disposition.find('filename') != -1:
 
@@ -81,7 +132,11 @@ def downloadFile(add_link_dictionary, number_of_threads):
     part = int(file_size) // number_of_threads
 
     # Create file with size of the content
-    file_path = os.path.join(download_path, file_name) 
+    if download_path:
+        file_path = os.path.join(download_path, file_name) 
+    else:
+        file_path = file_name
+
     fp = open(file_path, "wb")
     fp.write(b'\0' * file_size)
     fp.close()
@@ -93,7 +148,11 @@ def downloadFile(add_link_dictionary, number_of_threads):
 
         # create a Thread with start and end locations
         t = threading.Thread(target=handler,
-                             kwargs={'start': start, 'end': end, 'url': link, 'file_path': file_path})
+                             kwargs={'start': start,
+                                     'end': end,
+                                     'link': link,
+                                     'file_path': file_path,
+                                     'requests_session': requests_session})
         t.setDaemon(True)
         t.start()
 
