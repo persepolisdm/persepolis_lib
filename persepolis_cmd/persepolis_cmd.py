@@ -22,6 +22,8 @@ parser.add_argument('--version', action='version', version='Persepolis CMD 1.0.0
 parser.add_argument('--link', action='store', nargs=1, help='Download link.(Use "" for links)')
 parser.add_argument('--name', action='store', nargs=1, help='The  file  name  of  the downloaded file with extension. ')
 parser.add_argument('--number-of-threads', action='store', nargs=1, help='Number of threads.')
+parser.add_argument('--download-path', action='store', nargs=1, help='Number of threads.')
+
 
 
 args, unknownargs = parser.parse_known_args()
@@ -37,6 +39,11 @@ if args.name:
     add_link_dictionary['out'] = "".join(args.name)
 else:
     add_link_dictionary['out'] = None
+
+if args.download_path:
+    add_link_dictionary['download_path'] = "".join(args.download_path)
+else:
+    add_link_dictionary['download_path'] = None
 
 if args.number_of_threads:
     number_of_threads = "".join(args.number_of_threads)

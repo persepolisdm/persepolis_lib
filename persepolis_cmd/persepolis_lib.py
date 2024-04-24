@@ -16,7 +16,7 @@
 
 import requests
 import threading 
-
+import os
 
 # this script forked from 
 # https://www.geeksforgeeks.org/simple-multithreaded-download-manager-in-python/
@@ -24,7 +24,7 @@ import threading
 # The below code is used for each chunk of file handled
 # by each thread for downloading the content from specified
 # location to storage
-def handler(start, end, url, filename):
+def handler(start, end, url, file_path):
 
     # specify the starting and ending of the file
     headers = {'Range': 'bytes=%d-%d' % (start, end)}
@@ -35,7 +35,7 @@ def handler(start, end, url, filename):
     # open the file and write the content of the html page
     # into file.
     # r+b mode is open the binary file in read or write mode.
-    with open(filename, "r+b") as fp:
+    with open(file_path, "r+b") as fp:
 
         fp.seek(start)
         fp.tell()
@@ -45,6 +45,7 @@ def downloadFile(add_link_dictionary, number_of_threads):
 
     link = add_link_dictionary['link']
     name = add_link_dictionary['out']
+    download_path = add_link_dictionary['download_path']
     number_of_threads = int(number_of_threads)
     
     response = requests.head(link, allow_redirects=True) 
@@ -80,7 +81,8 @@ def downloadFile(add_link_dictionary, number_of_threads):
     part = int(file_size) // number_of_threads
 
     # Create file with size of the content
-    fp = open(file_name, "wb")
+    file_path = os.path.join(download_path, file_name) 
+    fp = open(file_path, "wb")
     fp.write(b'\0' * file_size)
     fp.close()
 
@@ -91,7 +93,7 @@ def downloadFile(add_link_dictionary, number_of_threads):
 
         # create a Thread with start and end locations
         t = threading.Thread(target=handler,
-                             kwargs={'start': start, 'end': end, 'url': link, 'filename': file_name})
+                             kwargs={'start': start, 'end': end, 'url': link, 'file_path': file_path})
         t.setDaemon(True)
         t.start()
 
