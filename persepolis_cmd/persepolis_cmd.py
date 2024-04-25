@@ -13,8 +13,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import signal
 import argparse
 from persepolis_lib import Download
+import sys
 
 # create  terminal arguments
 parser = argparse.ArgumentParser(
@@ -115,6 +117,7 @@ else:
 
 if __name__ == '__main__':
     download_item = Download(add_link_dictionary, number_of_threads)
+    signal.signal(signal.SIGINT, download_item.stop)
     download_item.createSession()
     file_size, headers = download_item.getFileSize()
     if file_size:
@@ -125,3 +128,5 @@ if __name__ == '__main__':
         download_item.runProgressBar()
 
         download_item.runDownloadThreads(part_size)
+    sys.stdout.write('  Persepolis CMD is closed!\n')
+    sys.stdout.flush()

@@ -48,4 +48,4 @@ def convertSize(size, unit):
     elif unit == 'TiB':
         converted_size = size / 1024**4
 
-    return converted_size
+    return round(converted_size, 2)

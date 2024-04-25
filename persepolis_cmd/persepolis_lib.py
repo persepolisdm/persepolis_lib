@@ -32,6 +32,7 @@ class Download():
     def __init__(self, add_link_dictionary, number_of_threads):
         self.downloaded_size = 0
         self.finished_threads = 0
+        self.exit_event = threading.Event()
 
         self.link = add_link_dictionary['link']
         self.name = add_link_dictionary['out']
@@ -145,16 +146,17 @@ class Download():
         percent = 0
         end_time = time()
         last_download_value = self.downloaded_size
-        while self.finished_threads != self.number_of_threads:
+        while (self.finished_threads != self.number_of_threads) and\
+                (not (self.exit_event.wait(timeout=0.5))):
             percent = (self.downloaded_size/self.file_size)*100
 
             converted_downloaded_size = convertSize(self.downloaded_size, unit)
             download_status = (str(round(converted_downloaded_size, 2)) +
                                '|' + str(size) +
                                ' ' + unit)
-            filled_up_Length = int(percent)
-            bar = ('=' * filled_up_Length +
-                   '-' * (100 - filled_up_Length))
+            filled_up_Length = int(percent / 2)
+            bar = ('*' * filled_up_Length +
+                   '-' * (50 - filled_up_Length))
             diffrence_time = time() - end_time
             diffrence_size = self.downloaded_size - last_download_value
             diffrence_size_converted, speed_unit = humanReadableSize(
@@ -170,11 +172,12 @@ class Download():
             sys.stdout.flush()
             end_time = time()
             last_download_value = self.downloaded_size
-            sleep(0.5)
 
         if self.finished_threads == self.number_of_threads:
-            sys.stdout.write('\r')
-            sys.stdout.flush()
+            # cursor up one line
+            sys.stdout.write('\x1b[1A')
+            # delete last line
+            sys.stdout.write('\x1b[2K')
             sys.stdout.write(
                     '[%s] %s%s ...%s, %s   \r' % ('Download complete!',
                                                   int(100),
@@ -182,6 +185,23 @@ class Download():
                                                   ('|' + str(size) +
                                                    ' ' + unit),
                                                   self.file_path))
+            sys.stdout.flush()
+
+        elif self.exit_event.is_set():
+            download_status = (str(round(converted_downloaded_size, 2)) +
+                               '|' + str(size) +
+                               ' ' + unit)
+            # cursor up one line
+            sys.stdout.write('\x1b[1A')
+            # delete last line
+            sys.stdout.write('\x1b[2K')
+            sys.stdout.write(
+                    '[%s] %s%s ...%s   \n' % ('Download stopped!',
+                                              int(percent),
+                                              '%',
+                                              download_status))
+            sys.stdout.write('\x1b[2K')
+            sys.stdout.write('  Please wait...\n')
             sys.stdout.flush()
 
     def runDownloadThreads(self, part_size):
@@ -206,6 +226,8 @@ class Download():
                 continue
             t.join()
 
+        print('\r', flush=True)
+
     # The below code is used for each chunk of file handled
     # by each thread for downloading the content from specified
     # location to storage
@@ -228,7 +250,11 @@ class Download():
             fp.tell()
 
             for data in r.iter_content(chunk_size=100):
-                fp.write(data)
-                self.downloaded_size = self.downloaded_size + 100
+                if not (self.exit_event.is_set()):
+                    fp.write(data)
+                    self.downloaded_size = self.downloaded_size + 100
 
         self.finished_threads = self.finished_threads + 1
+
+    def stop(self, signum, frame):
+        self.exit_event.set()
