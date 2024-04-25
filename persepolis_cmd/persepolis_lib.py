@@ -248,6 +248,7 @@ class Download():
             t.join()
 
         print('\r', flush=True)
+        self.requests_session.close()
 
     # The below code is used for each chunk of file handled
     # by each thread for downloading the content from specified
@@ -281,4 +282,3 @@ class Download():
 
     def stop(self, signum, frame):
         self.exit_event.set()
-        self.requests_session.close()
