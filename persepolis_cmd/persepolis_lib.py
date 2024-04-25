@@ -23,8 +23,8 @@ import threading
 import os
 from requests.cookies import cookiejar_from_dict
 from http.cookies import SimpleCookie
-from time import sleep, time
-from useful_tools import humanReadableSize, convertSize
+from time import time
+from useful_tools import convertTime, humanReadableSize, convertSize
 import sys
 
 
@@ -120,7 +120,15 @@ class Download():
 
     def createFile(self):
         # chunk file
-        part_size = int(self.file_size) // self.number_of_threads
+        part_size = int(int(self.file_size) // self.number_of_threads)
+
+        if part_size <= 1024:
+            self.number_of_threads = int(self.file_size) // 1024
+            if self.number_of_threads == 0:
+                self.number_of_threads = 1
+                part_size = self.file_size
+            else:
+                part_size = int(self.file_size) // self.number_of_threads
 
         # Create file with size of the content
         if self.download_path:
@@ -164,11 +172,24 @@ class Download():
             download_speed = round(diffrence_size_converted / diffrence_time,
                                    2)
             download_speed_str = str(download_speed) + " " + speed_unit + "/s"
-            sys.stdout.write('[%s] %s%s ...%s, %s   \r' % (bar,
-                                                           int(percent),
-                                                           '%',
-                                                           download_status,
-                                                           download_speed_str))
+
+            not_converted_download_speed = diffrence_size / diffrence_time
+            try:
+                eta_second = (self.file_size -
+                              self.downloaded_size) /\
+                              not_converted_download_speed
+            except Exception:
+                eta_second = 0
+
+            eta = convertTime(eta_second)
+            sys.stdout.write('[%s] %s%s ...%s, %s | ETA:%s           \r' % (
+                bar,
+                int(percent),
+                '%',
+                download_status,
+                download_speed_str,
+                eta))
+
             sys.stdout.flush()
             end_time = time()
             last_download_value = self.downloaded_size
@@ -249,12 +270,15 @@ class Download():
             fp.seek(start)
             fp.tell()
 
-            for data in r.iter_content(chunk_size=100):
+            for data in r.iter_content(chunk_size=1024):
                 if not (self.exit_event.is_set()):
                     fp.write(data)
-                    self.downloaded_size = self.downloaded_size + 100
+                    self.downloaded_size = self.downloaded_size + 1024
+                else:
+                    break
 
         self.finished_threads = self.finished_threads + 1
 
     def stop(self, signum, frame):
         self.exit_event.set()
+        self.requests_session.close()

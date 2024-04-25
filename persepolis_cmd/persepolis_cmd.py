@@ -128,5 +128,7 @@ if __name__ == '__main__':
         download_item.runProgressBar()
 
         download_item.runDownloadThreads(part_size)
+    # delete last line
+    sys.stdout.write('\x1b[2K')
     sys.stdout.write('  Persepolis CMD is closed!\n')
     sys.stdout.flush()

@@ -14,6 +14,18 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+def convertTime(time):
+    minutes = int(time // 60)
+    if minutes == 0:
+        return str(int(time)) + ' s'
+    elif minutes < 60:
+        return str(minutes) + ' m'
+    else:
+        hours = minutes // 60
+        minutes = minutes - (hours * 60)
+        return str(hours) + ' h' + str(minutes) + ' m'
+
+
 # this function converts file_size to KiB or MiB or GiB
 def humanReadableSize(size, input_type='file_size'):
     labels = ['KiB', 'MiB', 'GiB', 'TiB']
