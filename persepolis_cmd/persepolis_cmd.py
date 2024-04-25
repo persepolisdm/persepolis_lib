@@ -14,37 +14,41 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-from persepolis_lib import downloadFile
+from persepolis_lib import Download
 
 # create  terminal arguments
-parser = argparse.ArgumentParser(description='Persepolis command line download utility')
-parser.add_argument('--version', action='version', version='Persepolis CMD 0.0.1')
-parser.add_argument('--link', action='store', nargs=1, help='Download link.(Use "" for links)')
-parser.add_argument('--name', action='store', nargs=1, help='The  file  name  of  the downloaded file with extension. ')
-parser.add_argument('--number-of-threads', action='store', nargs=1, help='Number of threads.')
-parser.add_argument('--download-path', action='store', nargs=1, help='Set download path.')
+parser = argparse.ArgumentParser(
+        description='Persepolis command line download utility')
+parser.add_argument('--version',
+                    action='version', version='Persepolis CMD 0.0.1')
+parser.add_argument('--link',
+                    action='store', nargs=1,
+                    help='Download link.(Use "" for links)')
+parser.add_argument('--name',
+                    action='store', nargs=1,
+                    help='The  file  name  of  the downloaded file\
+                            with extension.')
+parser.add_argument('--number-of-threads',
+                    action='store', nargs=1, help='Number of threads.')
+parser.add_argument('--download-path', action='store', nargs=1,
+                    help='Set download path.')
 parser.add_argument('--proxy-ip', action='store', nargs=1, help='Proxy IP')
 parser.add_argument('--proxy-port', action='store', nargs=1, help='proxy port')
-parser.add_argument('--proxy-user', action='store', nargs=1, help='Proxy user name')
-parser.add_argument('--proxy-password', action='store', nargs=1, help='Proxy pass word')
-parser.add_argument('--download-user', action='store', nargs=1, help='Download user name')
-parser.add_argument('--download-password', action='store', nargs=1, help='Download pass word')
-parser.add_argument('--header', action='store', nargs=1, help='Append HEADER to HTTP request header.')
-parser.add_argument('--user-agent', action='store', nargs=1, help='Set user agent for HTTP(S) downloads.')
+parser.add_argument('--proxy-user',
+                    action='store', nargs=1, help='Proxy user name')
+parser.add_argument('--proxy-password', action='store', nargs=1,
+                    help='Proxy pass word')
+parser.add_argument('--download-user', action='store', nargs=1,
+                    help='Download user name')
+parser.add_argument('--download-password', action='store', nargs=1,
+                    help='Download pass word')
+parser.add_argument('--header', action='store', nargs=1,
+                    help='Append HEADER to HTTP request header.')
+parser.add_argument('--user-agent', action='store', nargs=1,
+                    help='Set user agent for HTTP(S) downloads.')
 parser.add_argument('--cookie', action='store', nargs=1, help='Cookie')
-parser.add_argument('--referrer', action='store', nargs=1, help='Set an http referrer')
-
-
-
-
-
-
-
-
-
-
-
-
+parser.add_argument('--referrer', action='store', nargs=1,
+                    help='Set an http referrer')
 args, unknownargs = parser.parse_known_args()
 
 add_link_dictionary = {'link': None,
@@ -109,5 +113,15 @@ if args.number_of_threads:
 else:
     number_of_threads = 4
 
-if __name__ == '__main__': 
-    downloadFile(add_link_dictionary, number_of_threads)
+if __name__ == '__main__':
+    download_item = Download(add_link_dictionary, number_of_threads)
+    download_item.createSession()
+    file_size, headers = download_item.getFileSize()
+    if file_size:
+        download_item.getFileName(headers)
+
+        part_size = download_item.createFile()
+
+        download_item.runProgressBar()
+
+        download_item.runDownloadThreads(part_size)
