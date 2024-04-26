@@ -32,6 +32,8 @@ class Download():
     def __init__(self, add_link_dictionary, number_of_threads):
         self.downloaded_size = 0
         self.finished_threads = 0
+        self.eta = "0"
+        self.download_speed_str = "0"
         self.exit_event = threading.Event()
 
         self.link = add_link_dictionary['link']
@@ -124,9 +126,9 @@ class Download():
 
         # chunk size must be greater than 1 Mib
         # if size of chunks are less than 1 Mib, then change thread numbers
-        if part_size <= 1024:
+        if part_size <= 1024 * 30:
             # calculate number of threads
-            self.number_of_threads = int(self.file_size) // 1024
+            self.number_of_threads = int(self.file_size) // (1024 * 30)
 
             # set thread number to 1 if file size less than 1MiB
             if self.number_of_threads == 0:
@@ -149,17 +151,46 @@ class Download():
         return part_size
 
     def runProgressBar(self):
+        calculate_speed_thread = threading.Thread(
+                target=self.downloadSpeed)
+        calculate_speed_thread.setDaemon(True)
+        calculate_speed_thread.start()
+
         progress_bar_thread = threading.Thread(
                 target=self.progressBar)
         progress_bar_thread.setDaemon(True)
         progress_bar_thread.start()
 
+    # this method calculate download speed and ETA every second.
+    def downloadSpeed(self):
+        last_download_value = self.downloaded_size
+        end_time = time()
+        while (self.finished_threads != self.number_of_threads) and\
+                (not (self.exit_event.wait(timeout=3))):
+            diffrence_time = time() - end_time
+            diffrence_size = self.downloaded_size - last_download_value
+            diffrence_size_converted, speed_unit = humanReadableSize(
+                    diffrence_size, 'speed')
+            download_speed = round(diffrence_size_converted / diffrence_time,
+                                   2)
+            self.download_speed_str = (str(download_speed) +
+                                       " " + speed_unit + "/s")
+            not_converted_download_speed = diffrence_size / diffrence_time
+            try:
+                eta_second = (self.file_size -
+                              self.downloaded_size) /\
+                              not_converted_download_speed
+            except Exception:
+                eta_second = 0
+
+            self.eta = convertTime(eta_second)
+            end_time = time()
+            last_download_value = self.downloaded_size
+
     def progressBar(self):
 
         size, unit = humanReadableSize(self.file_size)
         percent = 0
-        end_time = time()
-        last_download_value = self.downloaded_size
         while (self.finished_threads != self.number_of_threads) and\
                 (not (self.exit_event.wait(timeout=0.5))):
             percent = (self.downloaded_size/self.file_size)*100
@@ -171,37 +202,43 @@ class Download():
             filled_up_Length = int(percent / 2)
             bar = ('*' * filled_up_Length +
                    '-' * (50 - filled_up_Length))
-            diffrence_time = time() - end_time
-            diffrence_size = self.downloaded_size - last_download_value
-            diffrence_size_converted, speed_unit = humanReadableSize(
-                    diffrence_size, 'speed')
-            download_speed = round(diffrence_size_converted / diffrence_time,
-                                   2)
-            download_speed_str = str(download_speed) + " " + speed_unit + "/s"
 
-            not_converted_download_speed = diffrence_size / diffrence_time
-            try:
-                eta_second = (self.file_size -
-                              self.downloaded_size) /\
-                              not_converted_download_speed
-            except Exception:
-                eta_second = 0
+            # find downloded size of every thread
+            downloaded_size_list_str = ""
+            for i in range(len(self.downloaded_size_list)):
+                part_size_converted, unit_part_size = humanReadableSize(
+                        self.downloaded_size_list[i])
+                downloaded_size_list_str = (
+                        downloaded_size_list_str +
+                        "part " +
+                        str(i + 1) +
+                        ": " +
+                        str(part_size_converted) +
+                        unit_part_size +
+                        "|")
+                if i in list(range(3, 31, 4)):
+                    downloaded_size_list_str = downloaded_size_list_str + '\n'
 
-            eta = convertTime(eta_second)
-
+            downloaded_size_list_str = downloaded_size_list_str + "\n"
+            number_of_lines = downloaded_size_list_str.count("\n")
             # delete last line
-            sys.stdout.write('\x1b[2K')
-            sys.stdout.write('[%s] %s%s ...%s, %s | ETA:%s\r' % (
+#             sys.stdout.write('\x1b[2K')
+#             sys.stdout.write('\033[2J')
+            sys.stdout.write('[%s] %s%s ...%s, %s | ETA:%s\n%s' % (
                 bar,
                 int(percent),
                 '%',
                 download_status,
-                download_speed_str,
-                eta))
+                self.download_speed_str,
+                self.eta,
+                downloaded_size_list_str))
 
             sys.stdout.flush()
-            end_time = time()
-            last_download_value = self.downloaded_size
+
+            # move curser to the first line and clear screen
+            for i in list(range(number_of_lines + 1)):
+                sys.stdout.write('\x1b[1A')
+                sys.stdout.write('\x1b[2K')
 
         if self.finished_threads == self.number_of_threads:
             # cursor up one line
@@ -236,16 +273,21 @@ class Download():
 
     def runDownloadThreads(self, part_size):
 
+        # create a list for saving amount of downloads for every thread
+        self.downloaded_size_list = [0] * self.number_of_threads
+
         # set start and end of all chunks except the last one
         for i in (range(self.number_of_threads - 1)):
             start = part_size * i
             end = start + part_size
 
             # create a Thread with start and end locations
+            # thread_number is between 0 and number_of_threads - 1
             t = threading.Thread(
                 target=self.handler,
                 kwargs={'start': start,
-                        'end': end})
+                        'end': end,
+                        'thread_number': i})
             t.setDaemon(True)
             t.start()
 
@@ -259,9 +301,13 @@ class Download():
         t = threading.Thread(
             target=self.handler,
             kwargs={'start': start,
-                    'end': end})
+                    'end': end,
+                    'thread_number': (self.number_of_threads - 1)})
         t.setDaemon(True)
         t.start()
+
+        # create a list for saving amount of downloads for every thread
+        self.downloaded_size_list = [0] * self.number_of_threads
 
         # Return the current Thread object
         main_thread = threading.current_thread()
@@ -278,14 +324,14 @@ class Download():
     # The below code is used for each chunk of file handled
     # by each thread for downloading the content from specified
     # location to storage
-    def handler(self, start, end):
+    def handler(self, start, end, thread_number):
 
         # calculate part size
         part_size = end - start
 
         # amount of downlded size from this part is saved
         # in this variable
-        downloaded_part = 0
+        downloaded_part = self.downloaded_size_list[thread_number]
 
         # specify the starting and ending of the file
         chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
@@ -310,7 +356,7 @@ class Download():
             # of bytes it should read into memory. This is not necessarily
             # the length of each item returned as decoding can take place.
             # so we divide our chunk to smaller chunks. default is 1 Mib
-            smaller_chunk_size = 1024
+            smaller_chunk_size = 1024 * 30
             for data in r.iter_content(chunk_size=smaller_chunk_size):
                 if not (self.exit_event.is_set()):
                     fp.write(data)
@@ -325,6 +371,8 @@ class Download():
                     # update downloaded_part
                     downloaded_part = (downloaded_part +
                                        update_chunk_size)
+                    # save value to downloaded_size_list
+                    self.downloaded_size_list[thread_number] = downloaded_part
 
                     # this variable saves amount of total downloaded size
                     # update downloaded_size
