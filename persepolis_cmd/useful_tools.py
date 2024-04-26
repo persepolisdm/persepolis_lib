@@ -13,17 +13,17 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+# this function converts second to hour and minute
 def convertTime(time):
     minutes = int(time // 60)
     if minutes == 0:
-        return str(int(time)) + ' s'
+        return str(int(time)) + 's'
     elif minutes < 60:
-        return str(minutes) + ' m'
+        return str(minutes) + 'm'
     else:
         hours = minutes // 60
         minutes = minutes - (hours * 60)
-        return str(hours) + ' h' + str(minutes) + ' m'
+        return str(hours) + 'h ' + str(minutes) + 'm'
 
 
 # this function converts file_size to KiB or MiB or GiB

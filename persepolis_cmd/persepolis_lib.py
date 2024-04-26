@@ -122,15 +122,21 @@ class Download():
         # chunk file
         part_size = int(int(self.file_size) // self.number_of_threads)
 
+        # chunk size must be greater than 1 Mib
+        # if size of chunks are less than 1 Mib, then change thread numbers
         if part_size <= 1024:
+            # calculate number of threads
             self.number_of_threads = int(self.file_size) // 1024
+
+            # set thread number to 1 if file size less than 1MiB
             if self.number_of_threads == 0:
                 self.number_of_threads = 1
                 part_size = self.file_size
             else:
+                # recalculate chunk size
                 part_size = int(self.file_size) // self.number_of_threads
 
-        # Create file with size of the content
+        # Create empty file with size of the content
         if self.download_path:
             self.file_path = os.path.join(self.download_path, self.file_name)
         else:
@@ -182,7 +188,10 @@ class Download():
                 eta_second = 0
 
             eta = convertTime(eta_second)
-            sys.stdout.write('[%s] %s%s ...%s, %s | ETA:%s           \r' % (
+
+            # delete last line
+            sys.stdout.write('\x1b[2K')
+            sys.stdout.write('[%s] %s%s ...%s, %s | ETA:%s\r' % (
                 bar,
                 int(percent),
                 '%',
@@ -226,7 +235,9 @@ class Download():
             sys.stdout.flush()
 
     def runDownloadThreads(self, part_size):
-        for i in range(self.number_of_threads):
+
+        # set start and end of all chunks except the last one
+        for i in (range(self.number_of_threads - 1)):
             start = part_size * i
             end = start + part_size
 
@@ -237,6 +248,20 @@ class Download():
                         'end': end})
             t.setDaemon(True)
             t.start()
+
+        # last thread!
+        # end of last chunk must be set to the end of the file
+        # so the last byte value is equal to the file_size
+        start = part_size * (self.number_of_threads - 1)
+        end = self.file_size
+
+        # create a Thread with start and end locations
+        t = threading.Thread(
+            target=self.handler,
+            kwargs={'start': start,
+                    'end': end})
+        t.setDaemon(True)
+        t.start()
 
         # Return the current Thread object
         main_thread = threading.current_thread()
@@ -255,6 +280,13 @@ class Download():
     # location to storage
     def handler(self, start, end):
 
+        # calculate part size
+        part_size = end - start
+
+        # amount of downlded size from this part is saved
+        # in this variable
+        downloaded_part = 0
+
         # specify the starting and ending of the file
         chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
 
@@ -271,10 +303,33 @@ class Download():
             fp.seek(start)
             fp.tell()
 
-            for data in r.iter_content(chunk_size=1024):
+            # why we use iter_content
+            # Iterates over the response data. When stream=True is set on
+            # the request, this avoids reading the content at once into
+            # memory for large responses. The chunk size is the number
+            # of bytes it should read into memory. This is not necessarily
+            # the length of each item returned as decoding can take place.
+            # so we divide our chunk to smaller chunks. default is 1 Mib
+            smaller_chunk_size = 1024
+            for data in r.iter_content(chunk_size=smaller_chunk_size):
                 if not (self.exit_event.is_set()):
                     fp.write(data)
-                    self.downloaded_size = self.downloaded_size + 1024
+
+                    # maybe the last chunk is less than 1MiB
+                    if downloaded_part <= (part_size - smaller_chunk_size):
+                        update_chunk_size = smaller_chunk_size
+                    else:
+                        # so the last small chunk is equal to :
+                        update_chunk_size = (part_size - downloaded_part)
+
+                    # update downloaded_part
+                    downloaded_part = (downloaded_part +
+                                       update_chunk_size)
+
+                    # this variable saves amount of total downloaded size
+                    # update downloaded_size
+                    self.downloaded_size = (self.downloaded_size +
+                                            update_chunk_size)
                 else:
                     break
 
