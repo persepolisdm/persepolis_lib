@@ -26,10 +26,13 @@ from http.cookies import SimpleCookie
 from time import time
 from useful_tools import convertTime, humanReadableSize, convertSize
 import sys
+import json
 
 
 class Download():
-    def __init__(self, add_link_dictionary, number_of_threads):
+    def __init__(self, add_link_dictionary, number_of_threads,
+                 smaller_chunk_size=1):
+        self.smaller_chunk_size = smaller_chunk_size
         self.downloaded_size = 0
         self.finished_threads = 0
         self.eta = "0"
@@ -89,19 +92,19 @@ class Download():
 
     def getFileSize(self):
         response = self.requests_session.head(self.link, allow_redirects=True)
-        file_header = response.headers
+        self.file_header = response.headers
 
         # find file size
         try:
-            self.file_size = int(file_header['content-length'])
+            self.file_size = int(self.file_header['content-length'])
         except Exception as error:
             print(str(error))
             print("Invalid URL")
             self.file_size = None
 
-        return self.file_size, file_header
+        return self.file_size
 
-    def getFileName(self, file_header):
+    def getFileName(self):
         # set file name
         self.file_name = self.link.split('/')[-1]
 
@@ -109,8 +112,8 @@ class Download():
             self.file_name = self.name
 
         # checking if filename is available
-        elif 'Content-Disposition' in file_header.keys():
-            content_disposition = file_header['Content-Disposition']
+        elif 'Content-Disposition' in self.file_header.keys():
+            content_disposition = self.file_header['Content-Disposition']
 
             if content_disposition.find('filename') != -1:
 
@@ -120,15 +123,22 @@ class Download():
                 # getting file name in desired format
                 self.file_name = filename_splited.strip()
 
+    # this method gives etag from header
+    def getFileTag(self):
+        if 'ETag' in self.file_header.keys():
+            self.etag = self.file_header['ETag']
+        else:
+            self.etag = None
+
     def createFile(self):
         # chunk file
         part_size = int(int(self.file_size) // self.number_of_threads)
 
         # chunk size must be greater than 1 Mib
         # if size of chunks are less than 1 Mib, then change thread numbers
-        if part_size <= 1024 * 30:
+        if part_size <= 1024 * self.smaller_chunk_size:
             # calculate number of threads
-            self.number_of_threads = int(self.file_size) // (1024 * 30)
+            self.number_of_threads = int(self.file_size) // (1024 * self.smaller_chunk_size)
 
             # set thread number to 1 if file size less than 1MiB
             if self.number_of_threads == 0:
@@ -148,6 +158,19 @@ class Download():
         fp.write(b'\0' * self.file_size)
         fp.close()
 
+        # create download information file in json format
+        download_info_json_file = self.file_name + '.persepolis'
+        if self.download_path:
+            self.download_info_json_file_path = os.path.join(
+                    self.download_path, download_info_json_file)
+        else:
+            self.download_info_json_file_path = download_info_json_file
+        # create json file if not created before
+        try:
+            with open(self.download_info_json_file_path, 'x') as f:
+                f.write("")
+        except Exception:
+            pass
         return part_size
 
     def runProgressBar(self):
@@ -160,6 +183,11 @@ class Download():
                 target=self.progressBar)
         progress_bar_thread.setDaemon(True)
         progress_bar_thread.start()
+
+        save_download_info_thread = threading.Thread(
+                target=self.saveInfo)
+        save_download_info_thread.setDaemon(True)
+        save_download_info_thread.start()
 
     # this method calculate download speed and ETA every second.
     def downloadSpeed(self):
@@ -276,11 +304,15 @@ class Download():
         # create a list for saving amount of downloads for every thread
         self.downloaded_size_list = [0] * self.number_of_threads
 
+        # this list saves start of chunks
+        self.start_of_chunks_list = [0] * self.number_of_threads
+
         # set start and end of all chunks except the last one
         for i in (range(self.number_of_threads - 1)):
             start = part_size * i
             end = start + part_size
 
+            self.start_of_chunks_list[i] = start
             # create a Thread with start and end locations
             # thread_number is between 0 and number_of_threads - 1
             t = threading.Thread(
@@ -297,6 +329,7 @@ class Download():
         start = part_size * (self.number_of_threads - 1)
         end = self.file_size
 
+        self.start_of_chunks_list[(self.number_of_threads - 1)] = start
         # create a Thread with start and end locations
         t = threading.Thread(
             target=self.handler,
@@ -356,7 +389,7 @@ class Download():
             # of bytes it should read into memory. This is not necessarily
             # the length of each item returned as decoding can take place.
             # so we divide our chunk to smaller chunks. default is 1 Mib
-            smaller_chunk_size = 1024 * 30
+            smaller_chunk_size = 1024 * self.smaller_chunk_size
             for data in r.iter_content(chunk_size=smaller_chunk_size):
                 if not (self.exit_event.is_set()):
                     fp.write(data)
@@ -383,5 +416,43 @@ class Download():
 
         self.finished_threads = self.finished_threads + 1
 
+    # this methode save download information in json format every 10 second
+    def saveInfo(self):
+        while (self.finished_threads != self.number_of_threads) and\
+                (not (self.exit_event.wait(timeout=5))):
+            download_info_dict = {
+                    'ETag': self.etag,
+                    'file_name': self.file_name,
+                    'file_size': self.file_size,
+                    'number_of_threads': self.number_of_threads,
+                    'start_of_chunks_list': self.start_of_chunks_list,
+                    'downloaded_size_list': self.downloaded_size_list}
+
+            # write download_info_dict in json file
+            with open(self.download_info_json_file_path, "w") as outfile:
+                json.dump(download_info_dict, outfile)
+
+    # this method starts download
+    def start(self):
+        self.createSession()
+        file_size = self.getFileSize()
+        if file_size:
+            self.getFileName()
+
+            self.getFileTag()
+
+            part_size = self.createFile()
+
+            self.runProgressBar()
+
+            self.runDownloadThreads(part_size)
+        self.close()
+
     def stop(self, signum, frame):
         self.exit_event.set()
+
+    def close(self):
+        # delete last line
+        sys.stdout.write('\x1b[2K')
+        sys.stdout.write('  Persepolis CMD is closed!\n')
+        sys.stdout.flush()

@@ -51,6 +51,8 @@ parser.add_argument('--user-agent', action='store', nargs=1,
 parser.add_argument('--cookie', action='store', nargs=1, help='Cookie')
 parser.add_argument('--referrer', action='store', nargs=1,
                     help='Set an http referrer')
+parser.add_argument('--chunk-size', action='store', nargs=1,
+                    help='Chunk size in KiB, Default is 200 KiB')
 args, unknownargs = parser.parse_known_args()
 
 add_link_dictionary = {'link': None,
@@ -109,26 +111,24 @@ if args.cookie:
 if args.referrer:
     add_link_dictionary['referer'] = "".join(args.referrer)
 
-
 if args.number_of_threads:
     number_of_threads = "".join(args.number_of_threads)
 else:
     number_of_threads = 4
 
+if args.chunk_size:
+    chunk_size = "".join(args.chunk_size)
+else:
+    chunk_size = 200
+
+
 if __name__ == '__main__':
-    download_item = Download(add_link_dictionary, number_of_threads)
+    # create download object
+    download_item = Download(add_link_dictionary, int(number_of_threads),
+                             int(chunk_size))
+
+    # capture SIGINT signal
     signal.signal(signal.SIGINT, download_item.stop)
-    download_item.createSession()
-    file_size, headers = download_item.getFileSize()
-    if file_size:
-        download_item.getFileName(headers)
 
-        part_size = download_item.createFile()
-
-        download_item.runProgressBar()
-
-        download_item.runDownloadThreads(part_size)
-    # delete last line
-    sys.stdout.write('\x1b[2K')
-    sys.stdout.write('  Persepolis CMD is closed!\n')
-    sys.stdout.flush()
+    # start download
+    download_item.start()
