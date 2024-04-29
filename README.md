@@ -1,2 +1,2 @@
-# persepolis_cmd
-a command line download utility that written in python
+# persepolis_lib
+A Python library for easier and faster downloading
