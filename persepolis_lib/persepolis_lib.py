@@ -31,11 +31,12 @@ import json
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads,
-                 smaller_chunk_size=1):
-        self.smaller_chunk_size = smaller_chunk_size
+                 python_request_chunk_size=1):
+        self.python_request_chunk_size = python_request_chunk_size
         self.downloaded_size = 0
         self.finished_threads = 0
         self.eta = "0"
+        self.resume = False
         self.download_speed_str = "0"
         self.exit_event = threading.Event()
 
@@ -136,9 +137,10 @@ class Download():
 
         # chunk size must be greater than 1 Mib
         # if size of chunks are less than 1 Mib, then change thread numbers
-        if part_size <= 1024 * self.smaller_chunk_size:
+        if part_size <= 1024 * self.python_request_chunk_size:
             # calculate number of threads
-            self.number_of_threads = int(self.file_size) // (1024 * self.smaller_chunk_size)
+            self.number_of_threads = int(self.file_size) // (
+                    1024 * self.python_request_chunk_size)
 
             # set thread number to 1 if file size less than 1MiB
             if self.number_of_threads == 0:
@@ -148,29 +150,68 @@ class Download():
                 # recalculate chunk size
                 part_size = int(self.file_size) // self.number_of_threads
 
-        # Create empty file with size of the content
+        # find file_path and control_json_file_path
+        control_json_file = self.file_name + '.persepolis'
+
         if self.download_path:
+
             self.file_path = os.path.join(self.download_path, self.file_name)
+            self.control_json_file_path = os.path.join(
+                    self.download_path, control_json_file)
         else:
             self.file_path = self.file_name
+            self.control_json_file_path = control_json_file
 
-        fp = open(self.file_path, "wb")
-        fp.write(b'\0' * self.file_size)
-        fp.close()
-
-        # create download information file in json format
-        download_info_json_file = self.file_name + '.persepolis'
-        if self.download_path:
-            self.download_info_json_file_path = os.path.join(
-                    self.download_path, download_info_json_file)
-        else:
-            self.download_info_json_file_path = download_info_json_file
-        # create json file if not created before
+        # create json control file if not created before
         try:
-            with open(self.download_info_json_file_path, 'x') as f:
+            with open(self.control_json_file_path, 'x') as f:
                 f.write("")
         except Exception:
-            pass
+            # so the control file is already exists
+            # read control file
+            with open(self.control_json_file_path, "r") as f:
+                data_dict = json.load(f)
+
+                # check if the download is duplicated
+                # If download item is duplicated, so resume download
+                # check ETag
+                if 'ETag' in data_dict:
+
+                    if data_dict['ETag'] == self.etag:
+                        self.resume = True
+                    else:
+                        self.resume = False
+
+                # check file_size
+                elif 'file_size' in data_dict:
+
+                    if data_dict['file_size'] == self.file_size:
+                        self.resume = True
+                    else:
+                        self.resume = False
+                else:
+                    self.resume = False
+
+        # check if uncomplete download file exists
+        if os.path.isfile(self.file_path):
+            download_file_existance = True
+        else:
+            download_file_existance = False
+
+        if self.resume and not (download_file_existance):
+            self.resume = False
+            create_download_file = True
+        elif self.resume and download_file_existance:
+            create_download_file = False
+        else:
+            create_download_file = True
+
+        # create empty file
+        if create_download_file:
+            fp = open(self.file_path, "wb")
+            fp.write(b'\0' * self.file_size)
+            fp.close()
+
         return part_size
 
     def runProgressBar(self):
@@ -183,11 +224,6 @@ class Download():
                 target=self.progressBar)
         progress_bar_thread.setDaemon(True)
         progress_bar_thread.start()
-
-        save_download_info_thread = threading.Thread(
-                target=self.saveInfo)
-        save_download_info_thread.setDaemon(True)
-        save_download_info_thread.start()
 
     # this method calculate download speed and ETA every second.
     def downloadSpeed(self):
@@ -301,18 +337,38 @@ class Download():
 
     def runDownloadThreads(self, part_size):
 
-        # create a list for saving amount of downloads for every thread
-        self.downloaded_size_list = [0] * self.number_of_threads
+        if self.resume:
+            # read control file
+            with open(self.control_json_file_path, "r") as f:
+                data_dict = json.load(f)
 
-        # this list saves start of chunks
-        self.start_of_chunks_list = [0] * self.number_of_threads
+            self.number_of_threads = data_dict['number_of_threads']
+            self.downloaded_size_list = data_dict['downloaded_size_list']
+            self.start_of_chunks_list = data_dict['start_of_chunks_list']
+            self.downloaded_size = sum(self.downloaded_size_list)
+
+        else:
+            # create a list for saving amount of downloads for every thread
+            self.downloaded_size_list = [0] * self.number_of_threads
+
+            # this list saves start of chunks
+            self.start_of_chunks_list = [0] * self.number_of_threads
 
         # set start and end of all chunks except the last one
         for i in (range(self.number_of_threads - 1)):
-            start = part_size * i
-            end = start + part_size
+            if self.resume:
+                if self.downloaded_size_list[i] != 0:
+                    start = (self.start_of_chunks_list[i] +
+                             self.downloaded_size_list[i] -
+                             (self.python_request_chunk_size))
+                else:
+                    start = part_size * i
 
-            self.start_of_chunks_list[i] = start
+            else:
+                start = part_size * i
+                self.start_of_chunks_list[i] = start
+
+            end = part_size * (i + 1)
             # create a Thread with start and end locations
             # thread_number is between 0 and number_of_threads - 1
             t = threading.Thread(
@@ -326,10 +382,17 @@ class Download():
         # last thread!
         # end of last chunk must be set to the end of the file
         # so the last byte value is equal to the file_size
-        start = part_size * (self.number_of_threads - 1)
+        if self.resume:
+            start = (self.start_of_chunks_list[(self.number_of_threads - 1)] +
+                     self.downloaded_size_list[(self.number_of_threads - 1)] -
+                     (self.python_request_chunk_size * 5))
+
+        else:
+            start = part_size * (self.number_of_threads - 1)
+            self.start_of_chunks_list[(self.number_of_threads - 1)] = start
+
         end = self.file_size
 
-        self.start_of_chunks_list[(self.number_of_threads - 1)] = start
         # create a Thread with start and end locations
         t = threading.Thread(
             target=self.handler,
@@ -339,8 +402,11 @@ class Download():
         t.setDaemon(True)
         t.start()
 
-        # create a list for saving amount of downloads for every thread
-        self.downloaded_size_list = [0] * self.number_of_threads
+        # run saveInfo thread for updating control file
+        save_control_thread = threading.Thread(
+                target=self.saveInfo)
+        save_control_thread.setDaemon(True)
+        save_control_thread.start()
 
         # Return the current Thread object
         main_thread = threading.current_thread()
@@ -389,14 +455,15 @@ class Download():
             # of bytes it should read into memory. This is not necessarily
             # the length of each item returned as decoding can take place.
             # so we divide our chunk to smaller chunks. default is 1 Mib
-            smaller_chunk_size = 1024 * self.smaller_chunk_size
-            for data in r.iter_content(chunk_size=smaller_chunk_size):
+            python_request_chunk_size = 1024 * self.python_request_chunk_size
+            for data in r.iter_content(chunk_size=python_request_chunk_size):
                 if not (self.exit_event.is_set()):
                     fp.write(data)
 
                     # maybe the last chunk is less than 1MiB
-                    if downloaded_part <= (part_size - smaller_chunk_size):
-                        update_chunk_size = smaller_chunk_size
+                    if downloaded_part <= (part_size -
+                                           python_request_chunk_size):
+                        update_chunk_size = python_request_chunk_size
                     else:
                         # so the last small chunk is equal to :
                         update_chunk_size = (part_size - downloaded_part)
@@ -416,11 +483,11 @@ class Download():
 
         self.finished_threads = self.finished_threads + 1
 
-    # this methode save download information in json format every 10 second
+    # this methode save download information in json format every 1 second
     def saveInfo(self):
         while (self.finished_threads != self.number_of_threads) and\
-                (not (self.exit_event.wait(timeout=5))):
-            download_info_dict = {
+                (not (self.exit_event.wait(timeout=1))):
+            control_dict = {
                     'ETag': self.etag,
                     'file_name': self.file_name,
                     'file_size': self.file_size,
@@ -428,9 +495,9 @@ class Download():
                     'start_of_chunks_list': self.start_of_chunks_list,
                     'downloaded_size_list': self.downloaded_size_list}
 
-            # write download_info_dict in json file
-            with open(self.download_info_json_file_path, "w") as outfile:
-                json.dump(download_info_dict, outfile)
+            # write control_dict in json file
+            with open(self.control_json_file_path, "w") as outfile:
+                json.dump(control_dict, outfile)
 
     # this method starts download
     def start(self):

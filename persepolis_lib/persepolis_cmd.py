@@ -16,7 +16,6 @@
 import signal
 import argparse
 from persepolis_lib import Download
-import sys
 
 # create  terminal arguments
 parser = argparse.ArgumentParser(
