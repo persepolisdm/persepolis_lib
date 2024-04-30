@@ -38,6 +38,8 @@ class Download():
         self.eta = "0"
         self.resume = False
         self.download_speed_str = "0"
+        self.__Version__ = "0.0.1"
+        self.download_complete = False
         self.exit_event = threading.Event()
 
         self.link = add_link_dictionary['link']
@@ -107,7 +109,8 @@ class Download():
 
     def getFileName(self):
         # set file name
-        self.file_name = self.link.split('/')[-1]
+        # set last six characters for default name
+        self.file_name = self.link.split('/')[-1][-6:]
 
         if self.name:
             self.file_name = self.name
@@ -304,7 +307,8 @@ class Download():
                 sys.stdout.write('\x1b[1A')
                 sys.stdout.write('\x1b[2K')
 
-        if self.finished_threads == self.number_of_threads:
+        # print download complete message
+        if self.downloaded_size == self.file_size:
             # cursor up one line
             sys.stdout.write('\x1b[1A')
             # delete last line
@@ -359,8 +363,7 @@ class Download():
             if self.resume:
                 if self.downloaded_size_list[i] != 0:
                     start = (self.start_of_chunks_list[i] +
-                             self.downloaded_size_list[i] -
-                             (self.python_request_chunk_size))
+                             self.downloaded_size_list[i])
                 else:
                     start = part_size * i
 
@@ -519,6 +522,11 @@ class Download():
         self.exit_event.set()
 
     def close(self):
+        # if download complete, so delete control file
+        if self.downloaded_size == self.file_size:
+            self.download_complete = True
+            os.remove(self.control_json_file_path)
+
         # delete last line
         sys.stdout.write('\x1b[2K')
         sys.stdout.write('  Persepolis CMD is closed!\n')
