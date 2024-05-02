@@ -27,6 +27,8 @@ from time import time
 from useful_tools import convertTime, humanReadableSize, convertSize
 import sys
 import json
+from urllib.parse import urlparse, unquote
+from pathlib import Path
 
 
 class Download():
@@ -110,7 +112,12 @@ class Download():
     def getFileName(self):
         # set file name
         # set last six characters for default name
-        self.file_name = self.link.split('/')[-1][-6:]
+        parsed_linkd = urlparse(self.link)
+        self.file_name = Path(parsed_linkd.path).name
+
+        # URL might contain percent-encoded characters
+        if self.file_name.find('%'):
+            self.file_name = unquote(self.file_name)
 
         if self.name:
             self.file_name = self.name
