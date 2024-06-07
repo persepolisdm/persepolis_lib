@@ -13,6 +13,38 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import logging
+import os
+
+# define logging object
+logObj = logging.getLogger("Persepolis")
+logObj.setLevel(logging.INFO)
+
+# don't show log in console
+logObj.propagate = False
+
+log_file = os.path.join(os.path.expanduser('~'), 'persepolis_lib_log')
+
+# create a file handler
+handler = logging.FileHandler(log_file)
+handler.setLevel(logging.INFO)
+# create a logging format
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# add the handlers to the logger
+logObj.addHandler(handler)
+
+
+def sendToLog(text="", type="INFO"):
+    if type == "INFO":
+        logObj.info(text)
+    elif type == "ERROR":
+        logObj.error(text)
+    else:
+        logObj.warning(text)
+
 # this function converts second to hour and minute
 def convertTime(time):
     minutes = int(time // 60)
