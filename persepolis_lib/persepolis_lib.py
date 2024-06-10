@@ -63,10 +63,12 @@ class Download():
         self.timeout = timeout
         self.retry = retry
 
+    # create requests session
     def createSession(self):
         # define a requests session
         self.requests_session = requests.Session()
 
+        # check if user set proxy
         if self.ip:
             ip_port = 'http://' + str(self.ip) + ":" + str(self.port)
             if self.proxy_user:
@@ -75,6 +77,7 @@ class Download():
             # set proxy to the session
             self.requests_session.proxies = {'http': ip_port}
 
+        # check if download session needs authenthication
         if self.download_user:
             # set download user pass to the session
             self.requests_session.auth = (self.download_user,
@@ -92,12 +95,15 @@ class Download():
         if self.referer:
             # setting referer to the session
             self.requests_session.headers.update({'referer': self.referer})
+
         # set user_agent
         if self.user_agent:
             # setting user_agent to the session
             self.requests_session.headers.update(
                 {'user-agent': self.user_agent})
 
+    # get file size
+    # if file size is not available, then download link is invalid
     def getFileSize(self):
         response = self.requests_session.head(self.link, allow_redirects=True)
         self.file_header = response.headers
@@ -112,25 +118,29 @@ class Download():
 
         return self.file_size
 
+    # get file name if available
+    # if file name is not available, then set a file name
     def getFileName(self):
-        # set file name
-        # set last six characters for default name
+        # set default file name
         parsed_linkd = urlparse(self.link)
         self.file_name = Path(parsed_linkd.path).name
 
         # URL might contain percent-encoded characters
+        # for example farsi characters in link
         if self.file_name.find('%'):
             self.file_name = unquote(self.file_name)
 
+        # check if user set file name or not
         if self.name:
             self.file_name = self.name
 
-        # checking if filename is available
+        # check if filename is available in header
         elif 'Content-Disposition' in self.file_header.keys():
             content_disposition = self.file_header['Content-Disposition']
 
             if content_disposition.find('filename') != -1:
 
+                # so file name is available in header
                 filename_splited = content_disposition.split('filename=')
                 filename_splited = filename_splited[-1]
 
@@ -138,18 +148,22 @@ class Download():
                 self.file_name = filename_splited.strip()
 
     # this method gives etag from header
+    # ETag is an HTTP response header field that helps with caching behavior by making
+    # it easy to check whether a resource has changed, without having to re-download it.
     def getFileTag(self):
         if 'ETag' in self.file_header.keys():
             self.etag = self.file_header['ETag']
         else:
             self.etag = None
 
+    # create a file on hard disk equal to downlod file size
     def createFile(self):
-        # chunk file
+
+        # Divide the file into the number of threads.
         part_size = int(int(self.file_size) // self.number_of_threads)
 
-        # chunk size must be greater than 1 Mib
-        # if size of chunks are less than 1 Mib, then change thread numbers
+        # part size must be greater than 1 Mib
+        # if size of parts are less than 1 Mib, then change thread numbers
         if part_size <= 1024 * self.python_request_chunk_size:
             # calculate number of threads
             self.number_of_threads = int(self.file_size) // (
@@ -164,8 +178,13 @@ class Download():
                 part_size = int(self.file_size) // self.number_of_threads
 
         # find file_path and control_json_file_path
+        # If the file is partially downloaded, the download information is available in the control file.
+        # The format of this file is Jason. the control file extension is .persepolis.
+        # the control file name is same as download file name.
+        # control file path is same as download file path.
         control_json_file = self.file_name + '.persepolis'
 
+        # if user set download path
         if self.download_path:
 
             self.file_path = os.path.join(self.download_path, self.file_name)
@@ -183,6 +202,8 @@ class Download():
             # so the control file is already exists
             # read control file
             with open(self.control_json_file_path, "r") as f:
+
+                # save json file information in dictionary format
                 data_dict = json.load(f)
 
                 # check if the download is duplicated
@@ -195,7 +216,7 @@ class Download():
                     else:
                         self.resume = False
 
-                # check file_size
+                # if ETag is not available, then check file size
                 elif 'file_size' in data_dict:
 
                     if data_dict['file_size'] == self.file_size:
@@ -227,12 +248,15 @@ class Download():
 
         return part_size
 
+    # this method runs progress bar and speed calculator
     def runProgressBar(self):
+        # run  a thread for calculating download speed.
         calculate_speed_thread = threading.Thread(
             target=self.downloadSpeed)
         calculate_speed_thread.setDaemon(True)
         calculate_speed_thread.start()
 
+        # run a thread for showing progress bar
         progress_bar_thread = threading.Thread(
             target=self.progressBar)
         progress_bar_thread.setDaemon(True)
@@ -240,8 +264,12 @@ class Download():
 
     # this method calculate download speed and ETA every second.
     def downloadSpeed(self):
+        # Calculate the difference between downloaded volume and elapsed time
+        # and divide them to get the download speed.
         last_download_value = self.downloaded_size
         end_time = time()
+        # this loop repeated every 1 second. timeout=1
+        # and checks exit_event every time.
         while not (self.download_finished) and\
                 (not (self.exit_event.wait(timeout=1))):
             diffrence_time = time() - end_time
@@ -254,6 +282,7 @@ class Download():
                                        + " " + speed_unit + "/s")
             not_converted_download_speed = diffrence_size / diffrence_time
             try:
+                # estimated time the download will be completed.
                 eta_second = (self.file_size
                               - self.downloaded_size) /\
                     not_converted_download_speed
@@ -264,6 +293,7 @@ class Download():
             end_time = time()
             last_download_value = self.downloaded_size
 
+    # this method shows progress bar
     def progressBar(self):
 
         size, unit = humanReadableSize(self.file_size)
@@ -361,18 +391,25 @@ class Download():
             sys.stdout.write('  Please wait...\n')
             sys.stdout.flush()
 
+    # this method runs download threads
     def runDownloadThreads(self, part_size):
 
+        # Resume the incomplete download.
         if self.resume:
             # read control file
             with open(self.control_json_file_path, "r") as f:
                 data_dict = json.load(f)
 
+            # read number of threads
             self.number_of_threads = data_dict['number_of_threads']
-            self.downloaded_size_list = data_dict['downloaded_size_list']
+            # read start of every chunk.
             self.start_of_chunks_list = data_dict['start_of_chunks_list']
+            # Read the amount downloaded for each thread.
+            self.downloaded_size_list = data_dict['downloaded_size_list']
+            # calculate downloaded size
             self.downloaded_size = sum(self.downloaded_size_list)
 
+        # start new download
         else:
             # create a list for saving amount of downloads for every thread
             self.downloaded_size_list = [0] * self.number_of_threads
@@ -381,13 +418,14 @@ class Download():
             self.start_of_chunks_list = [0] * self.number_of_threads
 
         # this list saves response of python request for every threads
+        # save the answers for errors or to check the completion of the threads process.
         self.response_list = [0] * self.number_of_threads
 
         # this thread saves status of threads
         # 4 situation: active, error, complete, stopped
         self.thread_status_list = ['active'] * self.number_of_threads
 
-        # set start and end of all chunks except the last one
+        # set start and end of all parts except the last one
         for i in (range(self.number_of_threads - 1)):
             if self.resume:
                 if self.downloaded_size_list[i] != 0:
@@ -412,7 +450,7 @@ class Download():
             t.start()
 
         # last thread!
-        # end of last chunk must be set to the end of the file
+        # end of last part must be set to the end of the file
         # so the last byte value is equal to the file_size
         if self.resume:
             start = (self.start_of_chunks_list[(self.number_of_threads - 1)]
@@ -439,6 +477,7 @@ class Download():
         save_control_thread.setDaemon(True)
         save_control_thread.start()
 
+        # TODO
         # checking connections while not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
         while (self.file_size != self.downloaded_size) or\
@@ -543,7 +582,7 @@ class Download():
                     if not (self.exit_event.is_set()):
                         fp.write(data)
 
-                        # maybe the last chunk is less than 1MiB
+                        # maybe the last chunk is less than 1MiB(default chunk size)
                         if downloaded_part <= (part_size
                                                - python_request_chunk_size):
                             update_chunk_size = python_request_chunk_size
@@ -563,6 +602,7 @@ class Download():
                         self.downloaded_size = (self.downloaded_size
                                                 + update_chunk_size)
                     else:
+                        # exit_event is set
                         self.thread_status_list[thread_number] = 'stopped'
                         break
 
@@ -580,7 +620,7 @@ class Download():
 
         self.finished_threads = self.finished_threads + 1
 
-    # this methode save download information in json format every 1 second
+    # this method save download information in json format every 1 second
     def saveInfo(self):
         while (self.finished_threads != self.number_of_threads) and\
                 (not (self.exit_event.wait(timeout=1))):

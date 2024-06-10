@@ -46,6 +46,8 @@ def sendToLog(text="", type="INFO"):
         logObj.warning(text)
 
 # this function converts second to hour and minute
+
+
 def convertTime(time):
     minutes = int(time // 60)
     if minutes == 0:

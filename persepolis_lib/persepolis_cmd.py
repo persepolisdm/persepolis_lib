@@ -19,7 +19,7 @@ from persepolis_lib import Download
 
 # create  terminal arguments
 parser = argparse.ArgumentParser(
-        description='Persepolis command line download utility')
+    description='Persepolis command line download utility')
 parser.add_argument('--version',
                     action='version', version='Persepolis CMD 0.0.1')
 parser.add_argument('--link',
