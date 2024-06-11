@@ -41,7 +41,7 @@ class Download():
         self.resume = False
         self.download_speed_str = "0"
         self.__Version__ = "0.0.1"
-        self.download_complete = False
+        self.download_status = 'pending'
         self.download_finished = False
         self.exit_event = threading.Event()
 
@@ -480,25 +480,34 @@ class Download():
         # TODO
         # checking connections while download process is not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
+        # change retry_done to True if retrying is done.
+        retry_done = False
         while (self.file_size != self.downloaded_size) and\
                 (not (self.exit_event.wait(timeout=1))):
 
             # if threads status is not active or stopped
             # so threads finished download with complete or error status
-            if not all(thread_status
-                       in self.thread_status_list
-                       for thread_status
-                       in ['active', 'stopped']):
+            if all(thread_status
+                   in self.thread_status_list
+                   for thread_status
+                   in ['complete', 'error']):
+
+                # Don't retry again
+                if retry_done:
+                    self.download_status = 'Error'
+                    break
 
                 # retry
-                for i in range(self.retry):
-                    for thread_status in self.thread_status_list:
-                        if thread_status == 'error':
-                            # restart thread
-                            # find index of thread
-                            thread_index = self.thread_status_list.index(
-                                thread_status)
+                retry_done = True
+                for thread_status in self.thread_status_list:
+                    if thread_status == 'error':
+                        # restart thread
+                        # find index of thread
+                        thread_index = self.thread_status_list.index(
+                            thread_status)
 
+                        # retry
+                        for i in range(self.retry):
                             # find start and end of part and set new start
                             # new start is start + downloaded_part
                             start = (self.start_of_chunks_list[thread_index]
@@ -654,15 +663,20 @@ class Download():
         self.close()
 
     def stop(self, signum, frame):
+        self.download_status = 'Stopped'
         self.exit_event.set()
 
     def close(self):
         # if download complete, so delete control file
         if self.downloaded_size == self.file_size:
-            self.download_complete = True
+            self.download_status = 'Complete'
             os.remove(self.control_json_file_path)
 
         # delete last line
         sys.stdout.write('\x1b[2K')
+        if self.download_status == 'Stopped':
+            sys.stdout.write('  Download stopped!\n')
+        elif self.download_status == 'Error':
+            sys.stdout.write('  Error\n')
         sys.stdout.write('  Persepolis CMD is closed!\n')
         sys.stdout.flush()
