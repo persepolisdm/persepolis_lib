@@ -23,7 +23,7 @@ logObj.setLevel(logging.INFO)
 # don't show log in console
 logObj.propagate = False
 
-log_file = os.path.join(os.path.expanduser('~'), 'persepolis_lib_log')
+log_file = os.path.join(os.path.expanduser('~'), 'persepolis_lib_log.log')
 
 # create a file handler
 handler = logging.FileHandler(log_file)

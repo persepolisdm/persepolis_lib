@@ -105,7 +105,7 @@ class Download():
     # get file size
     # if file size is not available, then download link is invalid
     def getFileSize(self):
-        response = self.requests_session.head(self.link, allow_redirects=True)
+        response = self.requests_session.head(self.link, allow_redirects=True, timeout=5)
         self.file_header = response.headers
 
         # find file size
@@ -478,10 +478,10 @@ class Download():
         save_control_thread.start()
 
         # TODO
-        # checking connections while not complete or stopped
+        # checking connections while download process is not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
-        while (self.file_size != self.downloaded_size) or\
-                not (self.exit_event.wait(timeout=1)):
+        while (self.file_size != self.downloaded_size) and\
+                (not (self.exit_event.wait(timeout=1))):
 
             # if threads status is not active or stopped
             # so threads finished download with complete or error status
@@ -499,7 +499,8 @@ class Download():
                             thread_index = self.thread_status_list.index(
                                 thread_status)
 
-                            # find start and end of part
+                            # find start and end of part and set new start
+                            # new start is start + downloaded_part
                             start = (self.start_of_chunks_list[thread_index]
                                      + self.downloaded_size_list[thread_index])
 
