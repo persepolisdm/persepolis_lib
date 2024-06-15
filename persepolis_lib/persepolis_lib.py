@@ -33,7 +33,7 @@ from pathlib import Path
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads,
-                 python_request_chunk_size=1, timeout=25, retry=5):
+                 python_request_chunk_size=1, timeout=5, retry=5):
         self.python_request_chunk_size = python_request_chunk_size
         self.downloaded_size = 0
         self.finished_threads = 0
@@ -478,6 +478,7 @@ class Download():
         save_control_thread.start()
 
         # TODO
+        # در تلاش مجدد ایندکس ترد تصحیح شود
         # checking connections while download process is not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
         # change retry_done to True if retrying is done.
@@ -487,52 +488,52 @@ class Download():
 
             # if threads status is not active or stopped
             # so threads finished download with complete or error status
-            if not all(thread_status
-                       in self.thread_status_list
-                       for thread_status
-                       in ['active', 'stopped']):
+            if 'active' not in self.thread_status_list:
+                if 'stopped' not in self.thread_status_list:
+                    sendToLog(str(self.thread_status_list))
+                    # Don't retry again
+                    if retry_number == self.retry:
+                        self.download_status = 'Error'
+                        sendToLog('Stop retrying' + str(retry_number))
+                        break
 
-                # Don't retry again
-                if retry_number == self.retry:
-                    self.download_status = 'Error'
-                    sendToLog('Stop retrying')
-                    break
+                    # retry
+                    for thread_status in self.thread_status_list:
+                        if thread_status == 'error':
 
-                # retry
-                for thread_status in self.thread_status_list:
-                    if thread_status == 'error':
-                        # restart thread
-                        # find index of thread
-                        thread_index = self.thread_status_list.index(
-                            thread_status)
+                            sendToLog('retry' + str(retry_number))
+                            # restart thread
+                            # find index of thread
+                            thread_index = self.thread_status_list.index(
+                                thread_status)
 
-                        # retry
-                        # find start and end of part and set new start
-                        # new start is start + downloaded_part
-                        start = (self.start_of_chunks_list[thread_index]
-                                 + self.downloaded_size_list[thread_index])
+                            # retry
+                            # find start and end of part and set new start
+                            # new start is start + downloaded_part
+                            start = (self.start_of_chunks_list[thread_index]
+                                     + self.downloaded_size_list[thread_index])
 
-                        if thread_index != (self.number_of_threads - 1):
-                            end = part_size * (thread_index + 1)
-                        else:
-                            end = self.file_size
+                            if thread_index != (self.number_of_threads - 1):
+                                end = part_size * (thread_index + 1)
+                            else:
+                                end = self.file_size
 
-                        # set active status for thread
-                        self.thread_status_list[thread_index] = 'active'
-                        self.finished_threads = self.finished_threads - 1
+                            # set active status for thread
+                            self.thread_status_list[thread_index] = 'active'
+                            self.finished_threads = self.finished_threads - 1
 
-                        # create a Thread with start and end locations
-                        t = threading.Thread(
-                            target=self.handler,
-                            kwargs={'start': start,
-                                    'end': end,
-                                    'thread_number': thread_index})
-                        t.setDaemon(True)
-                        t.start()
+                            # create a Thread with start and end locations
+                            t = threading.Thread(
+                                target=self.handler,
+                                kwargs={'start': start,
+                                        'end': end,
+                                        'thread_number': thread_index})
+                            t.setDaemon(True)
+                            t.start()
 
-                retry_number = retry_number + 1
+                    retry_number = retry_number + 1
 
-        # download process ends
+            # download process ends
         self.download_finished = True
         # Return the current Thread object
         main_thread = threading.current_thread()
