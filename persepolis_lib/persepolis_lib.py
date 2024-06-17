@@ -157,8 +157,23 @@ class Download():
         else:
             self.etag = None
 
+    # Check if server supports multi threading or not
+    def multiThreadSupport(self):
+        if 'Accept-Ranges' in self.file_header.keys():
+            if self.file_header['Accept-Ranges'] == 'bytes':
+                sendToLog('Server supports multi thread downloading!')
+                return True
+            else:
+                sendToLog('Server dosn\'t support multi thread downloading!')
+                return False
+
     # create a file on hard disk equal to downlod file size
     def createFile(self):
+        # Check if server supports multi threading or not.
+        # If not, so set 1 for number of threads.
+        multi_thread_support = self.multiThreadSupport()
+        if multi_thread_support is False:
+            self.number_of_threads = 1
 
         # Divide the file into the number of threads.
         part_size = int(int(self.file_size) // self.number_of_threads)
@@ -481,7 +496,6 @@ class Download():
         save_control_thread.setDaemon(True)
         save_control_thread.start()
 
-        # TODO
         # checking connections while download process is not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
         # change retry_done to True if retrying is done.
