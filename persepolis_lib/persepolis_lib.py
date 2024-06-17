@@ -17,7 +17,6 @@
 # this script forked from
 # https://www.geeksforgeeks.org/simple-multithreaded-download-manager-in-python/
 
-
 import requests
 import threading
 import os
@@ -33,7 +32,7 @@ from pathlib import Path
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads,
-                 python_request_chunk_size=1, timeout=5, retry=5):
+                 python_request_chunk_size=1, timeout=15, retry=5):
         self.python_request_chunk_size = python_request_chunk_size
         self.downloaded_size = 0
         self.finished_threads = 0
@@ -271,7 +270,7 @@ class Download():
         # this loop repeated every 1 second. timeout=1
         # and checks exit_event every time.
         while not (self.download_finished) and\
-                (not (self.exit_event.wait(timeout=1))):
+                (not (self.exit_event.wait(timeout=3))):
             diffrence_time = time() - end_time
             diffrence_size = self.downloaded_size - last_download_value
             diffrence_size_converted, speed_unit = humanReadableSize(
@@ -417,11 +416,15 @@ class Download():
             # this list saves start of chunks
             self.start_of_chunks_list = [0] * self.number_of_threads
 
+            # set the start byte number for every thread
+            for i in (range(self.number_of_threads)):
+                self.start_of_chunks_list[i] = part_size * i
+
         # this list saves response of python request for every threads
         # save the answers for errors or to check the completion of the threads process.
         self.response_list = [0] * self.number_of_threads
 
-        # this thread saves status of threads
+        # this list saves status of threads
         # 4 situation: active, error, complete, stopped
         self.thread_status_list = ['active'] * self.number_of_threads
 
@@ -435,8 +438,7 @@ class Download():
                     start = part_size * i
 
             else:
-                start = part_size * i
-                self.start_of_chunks_list[i] = start
+                start = self.start_of_chunks_list[i]
 
             end = part_size * (i + 1)
             # create a Thread with start and end locations
@@ -478,7 +480,6 @@ class Download():
         save_control_thread.start()
 
         # TODO
-        # در تلاش مجدد ایندکس ترد تصحیح شود
         # checking connections while download process is not complete or stopped
         # wait(timeout=1) works as time.sleep(1)
         # change retry_done to True if retrying is done.
@@ -490,32 +491,28 @@ class Download():
             # so threads finished download with complete or error status
             if 'active' not in self.thread_status_list:
                 if 'stopped' not in self.thread_status_list:
-                    sendToLog(str(self.thread_status_list))
-                    # Don't retry again
+                    sendToLog('thread_status_list: ' + str(self.thread_status_list))
+
+                    # Don't retry again if retry_number is equal to self.retry
                     if retry_number == self.retry:
                         self.download_status = 'Error'
-                        sendToLog('Stop retrying' + str(retry_number))
+                        sendToLog('Stop retrying ' + str(retry_number))
                         break
 
                     # retry
-                    for thread_status in self.thread_status_list:
+                    for thread_index, thread_status in enumerate(self.thread_status_list):
                         if thread_status == 'error':
 
-                            sendToLog('retry' + str(retry_number))
                             # restart thread
-                            # find index of thread
-                            thread_index = self.thread_status_list.index(
-                                thread_status)
-
-                            # retry
                             # find start and end of part and set new start
                             # new start is start + downloaded_part
                             start = (self.start_of_chunks_list[thread_index]
                                      + self.downloaded_size_list[thread_index])
 
                             if thread_index != (self.number_of_threads - 1):
-                                end = part_size * (thread_index + 1)
+                                end = self.start_of_chunks_list[thread_index + 1] - 1
                             else:
+                                # last thread
                                 end = self.file_size
 
                             # set active status for thread
@@ -531,6 +528,7 @@ class Download():
                             t.setDaemon(True)
                             t.start()
 
+                    sendToLog('retry_number is ' + str(retry_number))
                     retry_number = retry_number + 1
 
             # download process ends
@@ -554,7 +552,11 @@ class Download():
 
         try:
             # calculate part size
-            part_size = end - start
+            if thread_number != (self.number_of_threads - 1):
+                part_size = self.start_of_chunks_list[thread_number + 1] - self.start_of_chunks_list[thread_number]
+            else:
+                # for the last part
+                part_size = self.file_size - self.start_of_chunks_list[thread_number]
 
             # amount of downlded size from this part is saved
             # in this variable
@@ -627,8 +629,11 @@ class Download():
 
         # if thread status ends with active status
         # so it's complete successfully.
-        if self.thread_status_list[thread_number] == 'active':
+        if (self.thread_status_list[thread_number] == 'active') and (self.downloaded_size_list[thread_number] == part_size):
+            sendToLog('thread ' + str(thread_number) + ' is complete!')
             self.thread_status_list[thread_number] = 'complete'
+        else:
+            self.thread_status_list[thread_number] = 'error'
 
         self.finished_threads = self.finished_threads + 1
 
