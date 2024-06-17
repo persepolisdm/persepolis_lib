@@ -28,6 +28,8 @@ import sys
 import json
 from urllib.parse import urlparse, unquote
 from pathlib import Path
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 class Download():
@@ -619,6 +621,19 @@ class Download():
                         # exit_event is set
                         self.thread_status_list[thread_number] = 'stopped'
                         break
+
+        except requests.ConnectionError as e:
+            # backoff_factor will help to apply delays between attempts to avoid failing again
+            retry = Retry(connect=3, backoff_factor=5)
+            adapter = HTTPAdapter(max_retries=retry)
+            self.requests_session.mount('http://', adapter)
+            self.requests_session.mount('https://', adapter)
+
+            self.thread_status_list[thread_number] = 'error'
+            error_text = ("thread_number: "
+                          + str(thread_number)
+                          + " " + str(e))
+            sendToLog(error_text)
 
         except Exception as e:
             self.thread_status_list[thread_number] = 'error'
