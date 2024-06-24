@@ -301,10 +301,10 @@ class Download():
         # Calculate the difference between downloaded volume and elapsed time
         # and divide them to get the download speed.
         last_download_value = self.downloaded_size
-        end_time = time.time()
-        # this loop repeated every 1 second.
+        end_time = time.perf_counter()
+        # this loop repeated every 5 second.
         while self.download_status == 'Downloading':
-            diffrence_time = time.time() - end_time
+            diffrence_time = time.perf_counter() - end_time
             diffrence_size = self.downloaded_size - last_download_value
             diffrence_size_converted, speed_unit = humanReadableSize(
                 diffrence_size, 'speed')
@@ -322,9 +322,9 @@ class Download():
                 eta_second = 0
 
             self.eta = convertTime(eta_second)
-            end_time = time.time()
+            end_time = time.perf_counter()
             last_download_value = self.downloaded_size
-            time.sleep(1)
+            time.sleep(5)
 
     # this method shows progress bar
     def progressBar(self):
