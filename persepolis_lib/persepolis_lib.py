@@ -21,7 +21,7 @@ import threading
 import os
 from requests.cookies import cookiejar_from_dict
 from http.cookies import SimpleCookie
-from useful_tools import convertTime, humanReadableSize, convertSize, sendToLog
+from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog
 import sys
 import json
 from urllib.parse import urlparse, unquote

@@ -15,7 +15,31 @@
 
 import signal
 import argparse
-from persepolis_lib import Download
+import sys
+import os
+import platform
+
+# finding os platform
+os_type = platform.system()
+
+# Don't run persepolis as root!
+if os_type == 'Linux' or os_type == 'FreeBSD' or os_type == 'OpenBSD' or os_type == 'Darwin':
+    uid = os.getuid()
+    if uid == 0:
+        print('Do not run persepolis_lib as root.')
+        sys.exit(1)
+
+
+cwd = os.path.abspath(__file__)
+run_dir = os.path.dirname(cwd)
+# if persepolis run in test folder
+print('persepolis_lib is running from test folder')
+parent_dir = os.path.dirname(run_dir)
+
+sys.path.insert(0, parent_dir)
+
+
+from persepolis_lib.persepolis_lib import Download
 
 # create  terminal arguments
 parser = argparse.ArgumentParser(
