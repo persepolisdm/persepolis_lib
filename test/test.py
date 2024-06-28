@@ -149,7 +149,7 @@ else:
 if __name__ == '__main__':
     # create download object
     download_item = Download(add_link_dictionary, int(number_of_threads),
-                             int(chunk_size))
+                             int(chunk_size), progress_bar=True, threads_progress_bar=False)
 
     # capture SIGINT signal
     signal.signal(signal.SIGINT, download_item.stop)

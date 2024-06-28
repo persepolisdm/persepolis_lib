@@ -32,8 +32,10 @@ from urllib3.util.retry import Retry
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads,
-                 python_request_chunk_size=1, timeout=15, retry=5):
+                 python_request_chunk_size=1, timeout=15, retry=5, progress_bar=False, threads_progress_bar=False):
         self.python_request_chunk_size = python_request_chunk_size
+        self.progress_bar = progress_bar
+        self.threads_progress_bar = threads_progress_bar
         self.downloaded_size = 0
         self.finished_threads = 0
         self.eta = "0"
@@ -345,22 +347,28 @@ class Download():
 
             # find downloded size of every part
             downloaded_size_list_str = ""
-            for i in range(0, 64):
-                part_size_converted, unit_part_size = humanReadableSize(
-                    self.download_infromation_list[i][1])
-                downloaded_size_list_str = (
-                    downloaded_size_list_str
-                    + "part "
-                    + str(i + 1)
-                    + ": "
-                    + str(part_size_converted)
-                    + unit_part_size
-                    + "|")
-                if i in list(range(3, 64, 4)):
-                    downloaded_size_list_str = downloaded_size_list_str + '\n'
-            downloaded_size_list_str = downloaded_size_list_str + "\n"
-            number_of_lines = downloaded_size_list_str.count("\n")
+            if self.threads_progress_bar is True:
+                for i in range(0, 64):
+                    part_size_converted, unit_part_size = humanReadableSize(
+                        self.download_infromation_list[i][1])
+                    downloaded_size_list_str = (
+                        downloaded_size_list_str
+                        + "part "
+                        + str(i + 1)
+                        + ": "
+                        + str(part_size_converted)
+                        + unit_part_size
+                        + "|")
+                    if i in list(range(3, 64, 4)):
+                        downloaded_size_list_str = downloaded_size_list_str + '\n'
+                downloaded_size_list_str = downloaded_size_list_str + "\n"
+                number_of_lines = downloaded_size_list_str.count("\n")
+            else:
+                number_of_lines = 0
+
+            # number os active threads
             active_connection = self.number_of_threads - self.finished_threads
+
             # delete last line
             sys.stdout.write(
                 '[%s] %s%s ...%s, %s |connections:%s|ETA:%s\n%s' % (
@@ -437,11 +445,12 @@ class Download():
         calculate_speed_thread.setDaemon(True)
         calculate_speed_thread.start()
 
-        # run a thread for showing progress bar
-        progress_bar_thread = threading.Thread(
-            target=self.progressBar)
-        progress_bar_thread.setDaemon(True)
-        progress_bar_thread.start()
+        if self.progress_bar is True:
+            # run a thread for showing progress bar
+            progress_bar_thread = threading.Thread(
+                target=self.progressBar)
+            progress_bar_thread.setDaemon(True)
+            progress_bar_thread.start()
 
     # threadHandler asks new part for download from this method.
     def askForNewPart(self):
@@ -676,6 +685,8 @@ class Download():
             os.remove(self.control_json_file_path)
 
         # delete last line
-        sys.stdout.write('\x1b[2K')
-        sys.stdout.write('  Persepolis CMD is closed!\n')
-        sys.stdout.flush()
+        if self.progress_bar is True:
+            sys.stdout.write('\x1b[2K')
+            sys.stdout.write('  persepolis_lib is closed!\n')
+            sys.stdout.flush()
+        sendToLog("persepolis_lib is closed!")
