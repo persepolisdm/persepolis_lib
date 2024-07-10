@@ -42,7 +42,8 @@ class Download():
         self.resume = False
         self.download_speed_str = "0"
         self.__Version__ = "0.0.1"
-        # download_status can be in Pending, Downloading, Stop, Error
+
+        # download_status can be in Pending, Downloading, Stop, Error, Paused
         # All download_status start with a capital letter.
         self.download_status = 'Pending'
         self.exit_event = threading.Event()
@@ -63,6 +64,9 @@ class Download():
         self.timeout = timeout
         self.retry = retry
         self.lock = False
+        self.download_speed_reduction_index = 0
+        self.sleep_for_speed_limiting = 0
+        self.not_converted_download_speed = 0
 
         # number_of_threads can't be more that 64
         if number_of_threads <= 64:
@@ -298,14 +302,15 @@ class Download():
                 for i in range(number_of_parts, 64):
                     self.download_infromation_list[i] = [self.file_size, 0, 'complete', -1]
 
-    # this method calculate download speed and ETA every second.
+    # this method calculates download rate and ETA every second
+    # and alculates sleep between data reception for limiting download rate.
     def downloadSpeed(self):
         # Calculate the difference between downloaded volume and elapsed time
         # and divide them to get the download speed.
         last_download_value = self.downloaded_size
         end_time = time.perf_counter()
         # this loop repeated every 5 second.
-        while self.download_status == 'Downloading':
+        while self.download_status == 'Downloading' or self.download_status == 'Paused':
             diffrence_time = time.perf_counter() - end_time
             diffrence_size = self.downloaded_size - last_download_value
             diffrence_size_converted, speed_unit = humanReadableSize(
@@ -324,8 +329,17 @@ class Download():
                 eta_second = 0
 
             self.eta = convertTime(eta_second)
+
+            # download rate limitation
+            # user can set value for download_speed_reduction_index. A higher value for this variable will increase the sleep time
+            # between receiving data and decrease the download speed.
+            if self.download_speed_reduction_index != 0:
+                self.sleep_for_speed_limiting = self.sleep_for_speed_limiting + (self.download_speed_reduction_index / self.number_of_threads)
+                sendToLog('sleep value' + str(self.sleep_for_speed_limiting))
+
             end_time = time.perf_counter()
             last_download_value = self.downloaded_size
+
             time.sleep(5)
 
     # this method shows progress bar
@@ -333,7 +347,7 @@ class Download():
 
         size, unit = humanReadableSize(self.file_size)
         percent = 0
-        while (self.download_status == 'Downloading'):
+        while (self.download_status == 'Downloading' or self.download_status == 'Paused'):
             time.sleep(0.5)
             percent = (self.downloaded_size / self.file_size) * 100
 
@@ -476,7 +490,7 @@ class Download():
     # by each thread for downloading the content from specified
     # location to storage
     def threadHandler(self, thread_number):
-        while self.download_status == 'Downloading':
+        while self.download_status == 'Downloading' or self.download_status == 'Paused':
 
             # Wait for the lock to be released.
             while self.lock is True:
@@ -554,6 +568,13 @@ class Download():
                             # update downloaded_size
                             self.downloaded_size = (self.downloaded_size
                                                     + update_size)
+                            # perhaps user set limitation for download rate.
+                            time.sleep(self.sleep_for_speed_limiting)
+
+                        elif self.download_status == 'Paused':
+                            # wait for unpausing
+                            while self.download_status == 'Paused':
+                                time.sleep(0.2)
                         else:
                             self.download_infromation_list[part_number][2] = 'stopped'
                             break
@@ -618,7 +639,8 @@ class Download():
     # this method checks and manages download progress.
     def checkDownloadProgress(self):
         # Run this loop until the download is finished.
-        while (self.file_size != self.downloaded_size) and (self.download_status == 'Downloading') and (self.finished_threads != self.number_of_threads):
+        while (self.file_size != self.downloaded_size) and (self.download_status == 'Downloading' or self.download_status == 'Paused') and \
+              (self.finished_threads != self.number_of_threads):
 
             time.sleep(1)
 
@@ -678,6 +700,12 @@ class Download():
     def stop(self, signum, frame):
         self.download_status = 'Stopped'
         self.exit_event.set()
+
+    def downloadPause(self):
+        self.download_status = 'Paused'
+
+    def downloadUnpause(self):
+        self.download_status = 'Downloading'
 
     def close(self):
         # if download complete, so delete control file
