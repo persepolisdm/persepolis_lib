@@ -74,6 +74,16 @@ class Download():
         else:
             self.number_of_threads = 64
 
+    # this method get http header as string and convert it to dictionary
+    def convertHeaderToDictionary(headers):
+        dic = {}
+        for line in headers.split("\n"):
+            if line.startswith(("GET", "POST")):
+                continue
+            point_index = line.find(":")
+            dic[line[:point_index].strip()] = line[point_index + 1:].strip()
+        return dic
+
     # create requests session
     def createSession(self):
         # define a requests session
@@ -112,6 +122,12 @@ class Download():
             # setting user_agent to the session
             self.requests_session.headers.update(
                 {'user-agent': self.user_agent})
+
+        if self.header is not None:
+            # convert header to dictionary
+            dict_ = self.convertHeaderToDictionary(self.header)
+            # update headers
+            self.requests_session.headers.update(dict_)
 
         # set retry numbers.
         # backoff_factor will help to apply delays between attempts to avoid failing again
