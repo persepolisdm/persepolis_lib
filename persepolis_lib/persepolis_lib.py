@@ -43,9 +43,8 @@ class Download():
         self.download_speed_str = "0"
         self.__Version__ = "0.0.1"
 
-        # download_status can be in Pending, Downloading, Stop, Error, Paused
-        # All download_status start with a capital letter.
-        self.download_status = 'Pending'
+        # download_status can be in waiting, downloading, stop, error, paused
+        self.download_status = 'waiting'
         self.exit_event = threading.Event()
 
         self.link = add_link_dictionary['link']
@@ -326,7 +325,7 @@ class Download():
         last_download_value = self.downloaded_size
         end_time = time.perf_counter()
         # this loop repeated every 5 second.
-        while self.download_status == 'Downloading' or self.download_status == 'Paused':
+        while self.download_status == 'downloading' or self.download_status == 'paused':
             diffrence_time = time.perf_counter() - end_time
             diffrence_size = self.downloaded_size - last_download_value
             diffrence_size_converted, speed_unit = humanReadableSize(
@@ -363,7 +362,7 @@ class Download():
 
         size, unit = humanReadableSize(self.file_size)
         percent = 0
-        while (self.download_status == 'Downloading' or self.download_status == 'Paused'):
+        while (self.download_status == 'downloading' or self.download_status == 'paused'):
             time.sleep(0.5)
             percent = (self.downloaded_size / self.file_size) * 100
 
@@ -419,7 +418,7 @@ class Download():
                 sys.stdout.write('\x1b[2K')
 
         # print download complete message
-        if self.download_status == 'Complete':
+        if self.download_status == 'complete':
             # cursor up one line
             sys.stdout.write('\x1b[1A')
             # delete last line
@@ -433,7 +432,7 @@ class Download():
                                               self.file_path))
             sys.stdout.flush()
 
-        elif self.download_status == 'Stopped':
+        elif self.download_status == 'stopped':
             show_download_information = (str(round(converted_downloaded_size, 2))
                                          + '|' + str(size)
                                          + ' ' + unit)
@@ -450,7 +449,7 @@ class Download():
             sys.stdout.write('  Please wait...\n')
             sys.stdout.flush()
 
-        elif self.download_status == 'Error':
+        elif self.download_status == 'error':
             show_download_information = (str(round(converted_downloaded_size, 2))
                                          + '|' + str(size)
                                          + ' ' + unit)
@@ -506,7 +505,7 @@ class Download():
     # by each thread for downloading the content from specified
     # location to storage
     def threadHandler(self, thread_number):
-        while self.download_status == 'Downloading' or self.download_status == 'Paused':
+        while self.download_status == 'downloading' or self.download_status == 'paused':
 
             # Wait for the lock to be released.
             while self.lock is True:
@@ -563,7 +562,7 @@ class Download():
                                                  * self.python_request_chunk_size)
                     for data in response.iter_content(
                             chunk_size=python_request_chunk_size):
-                        if self.download_status == 'Downloading':
+                        if self.download_status == 'downloading':
                             fp.write(data)
 
                             # maybe the last chunk is less than 1MiB(default chunk size)
@@ -587,9 +586,9 @@ class Download():
                             # perhaps user set limitation for download rate.
                             time.sleep(self.sleep_for_speed_limiting)
 
-                        elif self.download_status == 'Paused':
+                        elif self.download_status == 'paused':
                             # wait for unpausing
-                            while self.download_status == 'Paused':
+                            while self.download_status == 'paused':
                                 time.sleep(0.2)
                         else:
                             self.download_infromation_list[part_number][2] = 'stopped'
@@ -655,7 +654,7 @@ class Download():
     # this method checks and manages download progress.
     def checkDownloadProgress(self):
         # Run this loop until the download is finished.
-        while (self.file_size != self.downloaded_size) and (self.download_status == 'Downloading' or self.download_status == 'Paused') and \
+        while (self.file_size != self.downloaded_size) and (self.download_status == 'downloading' or self.download_status == 'paused') and \
               (self.finished_threads != self.number_of_threads):
 
             time.sleep(1)
@@ -664,16 +663,16 @@ class Download():
         # If the downloaded size is the same as the file size, then the download has been completed successfully.
         if self.file_size == self.downloaded_size:
 
-            self.download_status = 'Complete'
+            self.download_status = 'complete'
             sendToLog('Download complete.')
 
         # If the download is not complete and the user has not stopped the download, then the download has encountered an error.
-        elif self.download_status != 'Stopped':
+        elif self.download_status != 'stopped':
 
-            self.download_status = 'Error'
+            self.download_status = 'error'
             sendToLog('Error')
 
-        elif self.download_status == 'Stopped':
+        elif self.download_status == 'stopped':
 
             sendToLog('Download stopped.')
 
@@ -696,7 +695,7 @@ class Download():
         self.createSession()
         file_size = self.getFileSize()
         if file_size:
-            self.download_status = 'Downloading'
+            self.download_status = 'downloading'
             self.getFileName()
 
             self.getFileTag()
@@ -710,22 +709,22 @@ class Download():
 
             self.checkDownloadProgress()
         else:
-            self.download_status = 'Error'
+            self.download_status = 'error'
         self.close()
 
     def stop(self, signum, frame):
-        self.download_status = 'Stopped'
+        self.download_status = 'stopped'
         self.exit_event.set()
 
     def downloadPause(self):
-        self.download_status = 'Paused'
+        self.download_status = 'paused'
 
     def downloadUnpause(self):
-        self.download_status = 'Downloading'
+        self.download_status = 'downloading'
 
     def close(self):
         # if download complete, so delete control file
-        if self.download_status == 'Complete':
+        if self.download_status == 'complete':
             os.remove(self.control_json_file_path)
 
         # delete last line
