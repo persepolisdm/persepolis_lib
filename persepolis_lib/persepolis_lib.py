@@ -46,6 +46,8 @@ class Download():
         # download_status can be in waiting, downloading, stop, error, paused
         self.download_status = 'waiting'
         self.exit_event = threading.Event()
+        self.file_name = '***'
+        self.file_size = 0
 
         self.link = add_link_dictionary['link']
         self.name = add_link_dictionary['out']
@@ -63,15 +65,17 @@ class Download():
         self.timeout = timeout
         self.retry = retry
         self.lock = False
-        self.download_speed_reduction_index = 0
         self.sleep_for_speed_limiting = 0
         self.not_converted_download_speed = 0
+        self.download_percent = 0
 
         # number_of_threads can't be more that 64
         if number_of_threads <= 64:
             self.number_of_threads = int(number_of_threads)
         else:
             self.number_of_threads = 64
+
+        self.number_of_active_connections = self.number_of_threads
 
     # this method get http header as string and convert it to dictionary
     def convertHeaderToDictionary(headers):
@@ -345,13 +349,6 @@ class Download():
 
             self.eta = convertTime(eta_second)
 
-            # download rate limitation
-            # user can set value for download_speed_reduction_index. A higher value for this variable will increase the sleep time
-            # between receiving data and decrease the download speed.
-            if self.download_speed_reduction_index != 0:
-                self.sleep_for_speed_limiting = self.sleep_for_speed_limiting + (self.download_speed_reduction_index / self.number_of_threads)
-                sendToLog('sleep value' + str(self.sleep_for_speed_limiting))
-
             end_time = time.perf_counter()
             last_download_value = self.downloaded_size
 
@@ -584,6 +581,9 @@ class Download():
                             self.downloaded_size = (self.downloaded_size
                                                     + update_size)
                             # perhaps user set limitation for download rate.
+                            # downloadrate limitation
+                            # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
+                            # receiving loop, which reduces the download speed.
                             time.sleep(self.sleep_for_speed_limiting)
 
                         elif self.download_status == 'paused':
@@ -657,7 +657,15 @@ class Download():
         while (self.file_size != self.downloaded_size) and (self.download_status == 'downloading' or self.download_status == 'paused') and \
               (self.finished_threads != self.number_of_threads):
 
+            # Calculate download percent
+            self.download_percent = int((self.downloaded_size / self.file_size) * 100)
+
+            # Calculate number of active threads
+            self.number_of_active_connections = self.number_of_threads - self.finished_threads
             time.sleep(1)
+
+        # Calculate download percent
+        self.download_percent = int((self.downloaded_size / self.file_size) * 100)
 
         sendToLog(str(self.finished_threads))
         # If the downloaded size is the same as the file size, then the download has been completed successfully.
@@ -721,6 +729,33 @@ class Download():
 
     def downloadUnpause(self):
         self.download_status = 'downloading'
+
+    # This method returns download status
+    def tellStatus(self):
+        downloded_size, downloaded_size_unit = humanReadableSize(self.downloaded_size)
+        file_size, file_size_unit = humanReadableSize(self.file_size)
+
+        # return information in dictionary format
+        download_info = {
+            'file_name': self.file_name,
+            'status': self.download_status,
+            'size': str(file_size) + ' ' + file_size_unit,
+            'downloaded_size': str(downloded_size) + ' ' + downloaded_size_unit,
+            'percent': str(self.download_percent) + '%',
+            'connections': str(self.number_of_active_connections),
+            'rate': self.download_speed_str,
+            'estimate_time_left': self.eta,
+            'link': self.link
+        }
+
+        return download_info
+
+    # This method limits download speed.
+    # limit_value is between 1 to 10.
+    # 10 means no limit speed.
+    def limitSpeed(self, limit_value):
+        # Calculate sleep time between data receiving. It's reduce download speed.
+        self.sleep_for_speed_limiting = (10 - limit_value) * 0.005 * (self.number_of_active_connections)
 
     def close(self):
         # if download complete, so delete control file
