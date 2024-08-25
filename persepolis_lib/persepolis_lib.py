@@ -45,7 +45,6 @@ class Download():
 
         # download_status can be in waiting, downloading, stop, error, paused
         self.download_status = 'waiting'
-        self.exit_event = threading.Event()
         self.file_name = '***'
         self.file_size = 0
 
@@ -76,6 +75,8 @@ class Download():
             self.number_of_threads = 64
 
         self.number_of_active_connections = self.number_of_threads
+
+        self.thread_list = []
 
     # this method get http header as string and convert it to dictionary
     def convertHeaderToDictionary(headers):
@@ -471,12 +472,19 @@ class Download():
         calculate_speed_thread.setDaemon(True)
         calculate_speed_thread.start()
 
+        # add thus thread to thread_list
+        self.thread_list.append(calculate_speed_thread)
+
         if self.progress_bar is True:
             # run a thread for showing progress bar
             progress_bar_thread = threading.Thread(
                 target=self.progressBar)
             progress_bar_thread.setDaemon(True)
             progress_bar_thread.start()
+
+        # add thus thread to thread_list
+        self.thread_list.append(progress_bar_thread)
+
 
     # threadHandler asks new part for download from this method.
     def askForNewPart(self):
@@ -613,8 +621,7 @@ class Download():
 
     # this method save download information in json format every 1 second
     def saveInfo(self):
-        while (self.finished_threads != self.number_of_threads) and\
-                (not (self.exit_event.wait(timeout=1))):
+        while self.download_status == 'downloading' or self.download_status == 'paused':
             control_dict = {
                 'ETag': self.etag,
                 'file_name': self.file_name,
@@ -624,6 +631,8 @@ class Download():
             # write control_dict in json file
             with open(self.control_json_file_path, "w") as outfile:
                 json.dump(control_dict, outfile, indent=2)
+
+            time.sleep(1)
 
     # this method runs download threads
     def runDownloadThreads(self):
@@ -645,11 +654,17 @@ class Download():
             t.setDaemon(True)
             t.start()
 
+            # add this thread to thread_list
+            self.thread_list.append(t)
+
         # run saveInfo thread for updating control file
         save_control_thread = threading.Thread(
             target=self.saveInfo)
         save_control_thread.setDaemon(True)
         save_control_thread.start()
+
+        # add this thread to thread_list
+        self.thread_list.append(save_control_thread)
 
     # this method checks and manages download progress.
     def checkDownloadProgress(self):
@@ -684,19 +699,7 @@ class Download():
 
             sendToLog('Download stopped.')
 
-        # Return the current Thread object
-        main_thread = threading.current_thread()
-
-        # Return a list of all Thread objects currently alive
-        for t in threading.enumerate():
-            if t is main_thread:
-                continue
-            t.join()
-
         print('\r', flush=True)
-
-        # close requests session
-        self.requests_session.close()
 
     # this method starts download
     def start(self):
@@ -722,7 +725,6 @@ class Download():
 
     def stop(self, signum, frame):
         self.download_status = 'stopped'
-        self.exit_event.set()
 
     def downloadPause(self):
         self.download_status = 'paused'
@@ -767,4 +769,12 @@ class Download():
             sys.stdout.write('\x1b[2K')
             sys.stdout.write('  persepolis_lib is closed!\n')
             sys.stdout.flush()
+
+        # close requests session
+        self.requests_session.close()
+
+        # ask threads for exiting.
+        for thread in self.thread_list:
+            thread.join()
+
         sendToLog("persepolis_lib is closed!")
