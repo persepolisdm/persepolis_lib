@@ -61,6 +61,7 @@ class Download():
         self.user_agent = add_link_dictionary['user_agent']
         self.raw_cookies = add_link_dictionary['load_cookies']
         self.referer = add_link_dictionary['referer']
+        self.number_of_parts = 0
         self.timeout = timeout
         self.retry = retry
         self.lock = False
@@ -294,6 +295,9 @@ class Download():
             # read number of threads
             self.download_infromation_list = data_dict['download_infromation_list']
 
+            # read number_of_parts
+            self.number_of_parts = data_dict['number_of_parts']
+
             # set pending status for uncomplete parts
             for i in range(0, 64):
                 if self.download_infromation_list[i][2] != 'complete':
@@ -307,19 +311,20 @@ class Download():
 
             # if part_size greater than 1 MiB
             if part_size >= 1024**2:
+                self.number_of_parts = 64
                 for i in range(0, 64):
                     self.download_infromation_list[i] = [i * part_size, 0, 'pending', -1]
 
             else:
                 # Calculate how many parts of one MiB we need.
-                number_of_parts = int(self.file_size // (1024**2)) + 1
-                for i in range(0, number_of_parts):
+                self.number_of_parts = int(self.file_size // (1024**2)) + 1
+                for i in range(0, self.number_of_parts):
                     self.download_infromation_list[i] = [i * 1024 * 1024, 0, 'pending', -1]
 
                 # Set the starting byte number of the remaining parts equal to the size of the file.
                 # The size of the file is equal to the last byte of the file.
                 # The status of these parts is complete. Because we have nothing to download.
-                for i in range(number_of_parts, 64):
+                for i in range(self.number_of_parts, 64):
                     self.download_infromation_list[i] = [self.file_size, 0, 'complete', -1]
 
     # this method calculates download rate and ETA every second
@@ -485,11 +490,10 @@ class Download():
         # add thus thread to thread_list
         self.thread_list.append(progress_bar_thread)
 
-
     # threadHandler asks new part for download from this method.
     def askForNewPart(self):
         self.lock = True
-        for i in range(0, 64):
+        for i in range(0, self.number_of_parts):
             # Check that this part is not being downloaded or its download is not complete.
             # Check that the number of retries of this part has not reached the set limit.
             if (self.download_infromation_list[i][2] not in ['complete', 'downloading']) and (self.download_infromation_list[i][3] != self.retry):
@@ -524,7 +528,7 @@ class Download():
                 break
             try:
                 # calculate part size
-                if part_number != 63:
+                if part_number != (self.number_of_parts - 1):
                     part_size = self.download_infromation_list[part_number + 1][0] - self.download_infromation_list[part_number][0]
                 else:
                     part_size = self.file_size - self.download_infromation_list[part_number][0]
@@ -534,7 +538,7 @@ class Download():
                 start = self.download_infromation_list[part_number][0] + downloaded_part
 
                 # end of part is equal to start of the next part
-                if part_number != 63:
+                if part_number != (self.number_of_parts - 1):
                     end = self.download_infromation_list[part_number + 1][0]
                 else:
                     end = self.file_size
@@ -621,6 +625,7 @@ class Download():
                 'ETag': self.etag,
                 'file_name': self.file_name,
                 'file_size': self.file_size,
+                'number_of_parts': self.number_of_parts,
                 'download_infromation_list': self.download_infromation_list}
 
             # write control_dict in json file
