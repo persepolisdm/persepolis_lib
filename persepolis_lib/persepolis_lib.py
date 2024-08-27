@@ -137,13 +137,6 @@ class Download():
             # update headers
             self.requests_session.headers.update(dict_)
 
-        # set retry numbers.
-        # backoff_factor will help to apply delays between attempts to avoid failing again
-        retry = Retry(connect=self.retry, backoff_factor=1)
-        adapter = HTTPAdapter(max_retries=retry)
-        self.requests_session.mount('http://', adapter)
-        self.requests_session.mount('https://', adapter)
-
     # get file size
     # if file size is not available, then download link is invalid
     def getFileSize(self):
@@ -159,6 +152,14 @@ class Download():
             self.file_size = None
 
         return self.file_size
+
+    def setRetry(self):
+        # set retry numbers.
+        # backoff_factor will help to apply delays between attempts to avoid failing again
+        retry = Retry(connect=self.retry, backoff_factor=1)
+        adapter = HTTPAdapter(max_retries=retry)
+        self.requests_session.mount('http://', adapter)
+        self.requests_session.mount('https://', adapter)
 
     # get file name if available
     # if file name is not available, then set a file name
@@ -578,12 +579,25 @@ class Download():
                             fp.write(data)
 
                             # maybe the last chunk is less than default chunk size
-                            if downloaded_part <= (part_size
-                                                   - python_request_chunk_size):
+                            if (part_size - downloaded_part) >= python_request_chunk_size:
                                 update_size = python_request_chunk_size
+                                # if update_size is not equal with actual data length,
+                                # then redownload this chunk.
+                                # exit this "for loop" for redownloading this chunk.
+                                if update_size != len(data):
+                                    # This loop does not end due to an error in the request.
+                                    # Therefore, no number should be added to the number of retries.
+                                    self.download_infromation_list[part_number][3] -= 1
+                                    break
+
                             else:
                                 # so the last small chunk is equal to :
                                 update_size = (part_size - downloaded_part)
+                                # so the last small chunk is equal to :
+                                update_size = (part_size - downloaded_part)
+                                # some times last chunks are smaller
+                                if len(data) < update_size:
+                                    update_size = len(data)
 
                             # if update_size is not equal with actual data length,
                             # then redownload this chunk.
@@ -723,6 +737,7 @@ class Download():
         self.createSession()
         file_size = self.getFileSize()
         if file_size:
+            self.setRetry()
             self.download_status = 'downloading'
             self.getFileName()
 
