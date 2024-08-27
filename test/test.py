@@ -14,6 +14,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from persepolis_lib.persepolis_lib import Download
 import signal
 import argparse
 import sys
@@ -40,8 +41,6 @@ parent_dir = os.path.dirname(run_dir)
 sys.path.insert(0, parent_dir)
 
 
-from persepolis_lib.persepolis_lib import Download
-
 # create  terminal arguments
 parser = argparse.ArgumentParser(
     description='Persepolis command line download utility')
@@ -64,6 +63,8 @@ parser.add_argument('--proxy-user',
                     action='store', nargs=1, help='Proxy user name')
 parser.add_argument('--proxy-password', action='store', nargs=1,
                     help='Proxy pass word')
+parser.add_argument('--proxy-type', action='store', nargs=1,
+                    help='set type proxy. http or socks5')
 parser.add_argument('--download-user', action='store', nargs=1,
                     help='Download user name')
 parser.add_argument('--download-password', action='store', nargs=1,
@@ -86,6 +87,7 @@ add_link_dictionary = {'link': None,
                        'port': None,
                        'proxy_user': None,
                        'proxy_passwd': None,
+                       'proxy_type': None,
                        'download_user': None,
                        'download_passwd': None,
                        'header': None,
@@ -96,7 +98,6 @@ add_link_dictionary = {'link': None,
 
 if args.link:
     add_link_dictionary['link'] = "".join(args.link)
-
 
 if args.name:
     add_link_dictionary['out'] = "".join(args.name)
@@ -115,6 +116,9 @@ if args.proxy_user:
 
 if args.proxy_password:
     add_link_dictionary['proxy_passwd'] = "".join(args.proxy_password)
+
+if args.proxy_type:
+    add_link_dictionary['proxy_type'] = "".join(args.proxy_type)
 
 if args.download_user:
     add_link_dictionary['download_user'] = "".join(args.download_user)

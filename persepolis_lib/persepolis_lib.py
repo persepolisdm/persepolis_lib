@@ -61,6 +61,7 @@ class Download():
         self.user_agent = add_link_dictionary['user_agent']
         self.raw_cookies = add_link_dictionary['load_cookies']
         self.referer = add_link_dictionary['referer']
+        self.proxy_type = add_link_dictionary['proxy_type']
         self.number_of_parts = 0
         self.timeout = timeout
         self.retry = retry
@@ -96,18 +97,20 @@ class Download():
 
         # check if user set proxy
         if self.ip:
-            ip_port = 'http://' + str(self.ip) + ":" + str(self.port)
+            ip_port = '://' + str(self.ip) + ":" + str(self.port)
             if self.proxy_user:
-                ip_port = ('http://' + self.proxy_user + ':'
+                ip_port = ('://' + self.proxy_user + ':'
                            + self.proxy_passwd + '@' + ip_port)
-            # set proxy to the session
-            self.requests_session.proxies = {'http': ip_port}
+            if self.proxy_type == 'socks5':
+                ip_port = 'socks5' + ip_port
+            else:
+                ip_port = 'http' + ip_port
 
-        # check if download session needs authenthication
-        if self.download_user:
-            # set download user pass to the session
-            self.requests_session.auth = (self.download_user,
-                                          self.download_passwd)
+            proxies = {'http': ip_port,
+                       'https': ip_port}
+
+            # set proxy to the session
+            self.requests_session.proxies.update(proxies)
 
         # set cookies
         if self.raw_cookies:
@@ -504,7 +507,7 @@ class Download():
                 break
 
             # no part found
-            if i == 63:
+            if i == self.number_of_parts:
                 i = None
 
         self.lock = False
@@ -582,9 +585,13 @@ class Download():
                                 # so the last small chunk is equal to :
                                 update_size = (part_size - downloaded_part)
 
-                            # if update_size is not equal with actual data length, so reject
-                            # this chunk and set erroe status. download this chunk again.
+                            # if update_size is not equal with actual data length,
+                            # then redownload this chunk.
+                            # exit this "for loop" for redownloading this chunk.
                             if update_size != len(data):
+                                # This loop does not end due to an error in the request.
+                                # Therefore, no number should be added to the number of retries.
+                                self.download_infromation_list[part_number][3] -= 1
                                 break
 
                             # update downloaded_part
