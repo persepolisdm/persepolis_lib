@@ -574,8 +574,18 @@ class Download():
                         if self.download_status == 'downloading':
                             fp.write(data)
 
-                            # Calculate update_size
-                            update_size = len(data)
+                            # maybe the last chunk is less than default chunk size
+                            if downloaded_part <= (part_size
+                                                   - python_request_chunk_size):
+                                update_size = python_request_chunk_size
+                            else:
+                                # so the last small chunk is equal to :
+                                update_size = (part_size - downloaded_part)
+
+                            # if update_size is not equal with actual data length, so reject
+                            # this chunk and set erroe status. download this chunk again.
+                            if update_size != len(data):
+                                break
 
                             # update downloaded_part
                             downloaded_part = (downloaded_part
