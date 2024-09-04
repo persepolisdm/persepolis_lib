@@ -31,7 +31,7 @@ from urllib3.util.retry import Retry
 
 
 class Download():
-    def __init__(self, add_link_dictionary, number_of_threads,
+    def __init__(self, add_link_dictionary, number_of_threads=64,
                  python_request_chunk_size=100, timeout=5, retry=5, progress_bar=False, threads_progress_bar=False):
         self.python_request_chunk_size = python_request_chunk_size
         self.progress_bar = progress_bar
