@@ -14,7 +14,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from persepolis_lib.persepolis_lib import Download
 import signal
 import argparse
 import sys
@@ -40,6 +39,7 @@ parent_dir = os.path.dirname(run_dir)
 
 sys.path.insert(0, parent_dir)
 
+from persepolis_lib.persepolis_lib import Download
 
 # create  terminal arguments
 parser = argparse.ArgumentParser(

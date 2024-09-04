@@ -32,7 +32,7 @@ from urllib3.util.retry import Retry
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads,
-                 python_request_chunk_size=1, timeout=15, retry=5, progress_bar=False, threads_progress_bar=False):
+                 python_request_chunk_size=100, timeout=5, retry=5, progress_bar=False, threads_progress_bar=False):
         self.python_request_chunk_size = python_request_chunk_size
         self.progress_bar = progress_bar
         self.threads_progress_bar = threads_progress_bar
@@ -41,7 +41,7 @@ class Download():
         self.eta = "0"
         self.resume = False
         self.download_speed_str = "0"
-        self.__Version__ = "0.0.1"
+        self.__Version__ = "1.0.0"
 
         # download_status can be in waiting, downloading, stop, error, paused
         self.download_status = 'waiting'
@@ -130,6 +130,12 @@ class Download():
             # setting user_agent to the session
             self.requests_session.headers.update(
                 {'user-agent': self.user_agent})
+        else:
+            self.user_agent = 'Persepolis lib/' + self.__Version__
+            # setting user_agent to the session
+            self.requests_session.headers.update(
+                {'user-agent': self.user_agent})
+
 
         if self.header is not None:
             # convert header to dictionary
@@ -571,7 +577,7 @@ class Download():
                     # memory for large responses. The chunk size is the number
                     # of bytes it should read into memory. This is not necessarily
                     # the length of each item returned as decoding can take place.
-                    # so we divide our chunk to smaller chunks. default is 1 Mib
+                    # so we divide our chunk to smaller chunks. default is 100 KiB
                     python_request_chunk_size = (1024
                                                  * self.python_request_chunk_size)
                     for data in response.iter_content(
