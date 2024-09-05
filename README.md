@@ -1,7 +1,13 @@
 # persepolis_lib
-A Python library for easier and faster downloading
-## Installation
 
+### **About**
+A Python library for easier and faster downloading
+
+### **Features**
+- Multi-segment downloading(64 connections)
+- Resuming downloads 
+
+## Installation
 
 ## Usage
 ```python

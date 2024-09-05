@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 .env
 ./__pycache__/
+dist/
+build/
+builddir/
+persepolis_lib.egg-info/
+venv_dir/

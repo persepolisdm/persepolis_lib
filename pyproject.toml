@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.setuptools]
+py-modules = ["persepolis_lib"]
+
+[project]
+name = "persepolis_lib"
+version = "1.0.0"
+dependencies = [
+  "requests",
+  "urllib3"
+]
+requires-python = ">=3.5"
+authors = [
+  {name = "AliReza AmirSamimi", email = "alireza.amirsamimi@gmail.com"}
+]
+maintainers = [
+  {name = "AliReza AmirSamimi", email = "alireza.amirsamimi@gmail.com"}
+]
+description = "A Python library for easier and faster downloading."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["persepolis", "download manager", "persepolis_lib"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python"
+]
+
+[project.urls]
+Homepage = "https://github.com/persepolisdm/persepolis_lib"
+Documentation = "https://github.com/persepolisdm/persepolis_lib/README.md"
+Repository = "https://github.com/persepolisdm/persepolis_lib"
+Issues = "https://github.com/persepolisdm/persepolis_lib/issues"
