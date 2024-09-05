@@ -8,7 +8,10 @@ A Python library for easier and faster downloading
 - Resuming downloads 
 
 ## Installation
-
+persepolis_lib is available on pypi.
+```
+pip install persepolis_lib
+```
 ## Usage
 ```python
 #!/usr/bin/python3
