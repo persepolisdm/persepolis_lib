@@ -277,38 +277,38 @@ class Download():
                 with open(self.control_json_file_path, 'x') as f:
                     f.write("")
 
-        except Exception:
-            # so the control file is already exists
-            # read control file
-            with open(self.control_json_file_path, "r") as f:
+            else:
+                # so the control file is already exists
+                # read control file
+                with open(self.control_json_file_path, "r") as f:
 
-                try:
-                    # save json file information in dictionary format
-                    data_dict = json.load(f)
+                    try:
+                        # save json file information in dictionary format
+                        data_dict = json.load(f)
 
-                    # check if the download is duplicated
-                    # If download item is duplicated, so resume download
-                    # check ETag
-                    if 'ETag' in data_dict:
+                        # check if the download is duplicated
+                        # If download item is duplicated, so resume download
+                        # check ETag
+                        if 'ETag' in data_dict:
 
-                        if data_dict['ETag'] == self.etag:
-                            self.resume = True
+                            if data_dict['ETag'] == self.etag:
+                                self.resume = True
+                            else:
+                                self.resume = False
+
+                        # if ETag is not available, then check file size
+                        elif 'file_size' in data_dict:
+
+                            if data_dict['file_size'] == self.file_size:
+                                self.resume = True
+                            else:
+                                self.resume = False
                         else:
                             self.resume = False
 
-                    # if ETag is not available, then check file size
-                    elif 'file_size' in data_dict:
-
-                        if data_dict['file_size'] == self.file_size:
-                            self.resume = True
-                        else:
-                            self.resume = False
-                    else:
+                    # control file is corrupted.
+                    except Exception:
                         self.resume = False
-
-                # control file is corrupted.
-                except Exception:
-                    self.resume = False
 
         # check if uncomplete download file exists
         if os.path.isfile(self.file_path):
