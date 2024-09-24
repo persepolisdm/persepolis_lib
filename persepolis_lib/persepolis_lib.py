@@ -20,9 +20,7 @@ import random
 import threading
 import os
 import errno
-from requests.cookies import cookiejar_from_dict
-from http.cookies import SimpleCookie
-from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog
+from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog, convertHeaderToDictionary, readCookieJar
 import sys
 import json
 from urllib.parse import urlparse, unquote
@@ -60,7 +58,7 @@ class Download():
         self.download_passwd = add_link_dictionary['download_passwd']
         self.header = add_link_dictionary['header']
         self.user_agent = add_link_dictionary['user_agent']
-        self.raw_cookies = add_link_dictionary['load_cookies']
+        self.load_cookies = add_link_dictionary['load_cookies']
         self.referer = add_link_dictionary['referer']
         self.proxy_type = add_link_dictionary['proxy_type']
         self.number_of_parts = 0
@@ -80,16 +78,6 @@ class Download():
         self.number_of_active_connections = self.number_of_threads
 
         self.thread_list = []
-
-    # this method get http header as string and convert it to dictionary
-    def convertHeaderToDictionary(headers):
-        dic = {}
-        for line in headers.split("\n"):
-            if line.startswith(("GET", "POST")):
-                continue
-            point_index = line.find(":")
-            dic[line[:point_index].strip()] = line[point_index + 1:].strip()
-        return dic
 
     # create requests session
     def createSession(self):
@@ -114,12 +102,10 @@ class Download():
             self.requests_session.proxies.update(proxies)
 
         # set cookies
-        if self.raw_cookies:
-            cookie = SimpleCookie()
-            cookie.load(self.raw_cookies)
-
-            cookies = {key: morsel.value for key, morsel in cookie.items()}
-            self.requests_session.cookies = cookiejar_from_dict(cookies)
+        if self.load_cookies:
+            jar = readCookieJar(self.load_cookies)
+            if jar:
+                self.requests_session.cookies = jar
 
         # set referer
         if self.referer:
@@ -139,7 +125,7 @@ class Download():
 
         if self.header is not None:
             # convert header to dictionary
-            dict_ = self.convertHeaderToDictionary(self.header)
+            dict_ = convertHeaderToDictionary(self.header)
             # update headers
             self.requests_session.headers.update(dict_)
 

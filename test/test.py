@@ -73,7 +73,7 @@ parser.add_argument('--header', action='store', nargs=1,
                     help='Append HEADER to HTTP request header.')
 parser.add_argument('--user-agent', action='store', nargs=1,
                     help='Set user agent for HTTP(S) downloads.')
-parser.add_argument('--cookie', action='store', nargs=1, help='Cookie')
+parser.add_argument('--cookie', action='store', nargs=1, help='Cookies file path')
 parser.add_argument('--referrer', action='store', nargs=1,
                     help='Set an http referrer')
 parser.add_argument('--chunk-size', action='store', nargs=1,

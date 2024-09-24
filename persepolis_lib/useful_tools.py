@@ -15,7 +15,7 @@
 
 import logging
 import os
-
+import requests
 # define logging object
 logObj = logging.getLogger("Persepolis")
 logObj.setLevel(logging.INFO)
@@ -95,3 +95,34 @@ def convertSize(size, unit):
         converted_size = size / 1024**4
 
     return round(converted_size, 2)
+
+
+# this method get http header as string and convert it to dictionary
+def convertHeaderToDictionary(headers):
+    dic = {}
+    for line in headers.split("\n"):
+        if line.startswith(("GET", "POST")):
+            continue
+        point_index = line.find(":")
+        dic[line[:point_index].strip()] = line[point_index + 1:].strip()
+    return dic
+
+
+def readCookieJar(load_cookies):
+    jar = None
+    if os.path.isfile(load_cookies):
+        # Open cookie file
+        cookies_txt = open(load_cookies, 'r')
+
+        # Initialize RequestsCookieJar
+        jar = requests.cookies.RequestsCookieJar()
+
+        for line in cookies_txt.readlines():
+            words = line.split()
+
+            # Filter out lines that don't contain cookies
+            if (len(words) == 7) and (words[0] != "#"):
+                # Split cookies into the appropriate parameters
+                jar.set(words[5], words[6], domain=words[0], path=words[2])
+
+        return jar
