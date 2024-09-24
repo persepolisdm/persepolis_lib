@@ -13,6 +13,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from pathlib import Path
+import urllib.parse
 import logging
 import os
 import requests
@@ -126,3 +128,12 @@ def readCookieJar(load_cookies):
                 jar.set(words[5], words[6], domain=words[0], path=words[2])
 
         return jar
+
+
+# get file name from link string.
+def getFileNameFromLink(link):
+    link = requests.utils.unquote(link)
+    parsed_linkd = urllib.parse.urlparse(link)
+    file_name = Path(parsed_linkd.path).name
+
+    return file_name
