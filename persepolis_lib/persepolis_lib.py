@@ -99,6 +99,7 @@ class Download():
                        'https': ip_port}
 
             # set proxy to the session
+            print(proxies)
             self.requests_session.proxies.update(proxies)
 
         # set cookies

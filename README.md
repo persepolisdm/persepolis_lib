@@ -32,7 +32,7 @@ download_dict = {'link': http://example.com/example.jpg, # your download link
                        'download_passwd': None, # set password, If your download link requires user name and password,Otherwise, set its value to ٔNone.
                        'header': None, # set header if you want, Otherwise, set its value to ٔNone.
                        'user_agent': None, # set user-agent if you want, Otherwise, set its value to ٔNone. persepolis_lib/version is default user agent.
-                       'load_cookies': None, # set cookies if you want, Otherwise, set its value to ٔNone.
+                       'load_cookies': None, # set cookies path if you want, Otherwise, set its value to ٔNone.
                        'referer': None} # set referrer if you want, Otherwise, set its value to ٔNone.
 # persepolis supports Multi-segment downloading. set number of threads. maximum value is 64. minimum value is 1. default is 64.
 segments = 64
