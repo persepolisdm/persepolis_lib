@@ -40,7 +40,7 @@ class Download():
         self.eta = "0"
         self.resume = False
         self.download_speed_str = "0"
-        self.__Version__ = "1.0.0"
+        self.__Version__ = "1.0.1"
 
         # download_status can be in waiting, downloading, stop, error, paused
         self.download_status = 'waiting'

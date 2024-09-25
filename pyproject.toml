@@ -7,10 +7,11 @@ py-modules = ["persepolis_lib"]
 
 [project]
 name = "persepolis_lib"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
   "requests",
-  "urllib3"
+  "urllib3",
+  "pysocks"
 ]
 requires-python = ">=3.5"
 authors = [
