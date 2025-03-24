@@ -77,7 +77,7 @@ class Download():
 
         self.thread_list = []
 
-        # this dictionary contains information about Each part is downloaded by which thread.
+        # this dictionary contains information about each part is downloaded by which thread.
         self.part_thread_dict = {}
 
     # create requests session
@@ -140,8 +140,8 @@ class Download():
         try:
             self.file_size = int(self.file_header['content-length'])
         except Exception as error:
-            print(str(error))
-            print("Invalid URL")
+            sendToLog(str(error), 'ERROR')
+            print("File size is not specified!")
             self.file_size = None
 
         return self.file_size
@@ -187,15 +187,17 @@ class Download():
         else:
             self.etag = None
 
-    # Check if server supports multi threading or not
-    def multiThreadSupport(self):
+    # Check if server supports multi threading and resuming or not
+    def resumingSupport(self):
+        self.resuming_suppurt = False
         if 'Accept-Ranges' in self.file_header.keys():
             if self.file_header['Accept-Ranges'] == 'bytes':
-                sendToLog('Server supports multi thread downloading!')
-                return True
+                sendToLog('Server supports multi thread downloading and resuming download!')
+                self.resuming_suppurt = True
             else:
-                sendToLog('Server dosn\'t support multi thread downloading!')
-                return False
+                sendToLog('Server dosn\'t support multi thread downloading and resuming download!', 'ERROR')
+        else:
+            sendToLog('Server dosn\'t support multi thread downloading and resuming download!', 'ERROR')
 
     def createControlFile(self):
         # find file_path and control_json_file_path
@@ -203,6 +205,7 @@ class Download():
         # The format of this file is Jason. the control file extension is .persepolis.
         # the control file name is same as download file name.
         # control file path is same as download file path.
+        # If the file_path is set to default path, the the control file path will be created in "Download" directory.
         control_json_file = self.file_name + '.persepolis'
 
         # if user set download path
@@ -292,6 +295,9 @@ class Download():
                     except Exception:
                         self.resume = False
 
+        if self.resuming_suppurt is False:
+            self.resume = False
+
         # check if uncomplete download file exists
         if os.path.isfile(self.file_path):
             download_file_existance = True
@@ -306,10 +312,14 @@ class Download():
         else:
             create_download_file = True
 
-        # create empty file
+        # create an empty file
         if create_download_file:
             fp = open(self.file_path, "wb")
-            fp.write(b'\0' * self.file_size)
+
+            # if file_size is specified, create an empty file with file_size
+            if self.file_size:
+                fp.write(b'\0' * self.file_size)
+
             fp.close()
 
     def definePartSizes(self):
@@ -335,30 +345,44 @@ class Download():
                 if self.download_infromation_list[i][2] != 'complete':
                     self.download_infromation_list[i] = [self.download_infromation_list[i][0], self.download_infromation_list[i][1], 'pending', -1]
 
+                # Calculate downloded size
                 self.downloaded_size = self.downloaded_size + self.download_infromation_list[i][1]
         else:
-            part_size = int(self.file_size // 64)
-            # create new list.
-            self.download_infromation_list = [[]] * 64
+            if self.file_size:
+                part_size = int(self.file_size // 64)
+                # create new list.
+                self.download_infromation_list = [[]] * 64
 
-            # if part_size greater than 1 MiB
-            if part_size >= 1024**2:
-                self.number_of_parts = 64
-                for i in range(0, 64):
-                    self.download_infromation_list[i] = [i * part_size, 0, 'pending', -1]
+                # if part_size greater than 1 MiB
+                if part_size >= 1024**2:
+                    self.number_of_parts = 64
+                    for i in range(0, 64):
+                        self.download_infromation_list[i] = [i * part_size, 0, 'pending', -1]
 
+                else:
+                    # Calculate how many parts of one MiB we need.
+                    self.number_of_parts = int(self.file_size // (1024**2)) + 1
+                    self.number_of_threads = self.number_of_parts
+                    for i in range(0, self.number_of_parts):
+                        self.download_infromation_list[i] = [i * 1024 * 1024, 0, 'pending', -1]
+
+                    # Set the starting byte number of the remaining parts equal to the size of the file.
+                    # The size of the file is equal to the last byte of the file.
+                    # The status of these parts is complete. Because we have nothing to download.
+                    for i in range(self.number_of_parts, 64):
+                        self.download_infromation_list[i] = [self.file_size, 0, 'complete', -1]
             else:
-                # Calculate how many parts of one MiB we need.
-                self.number_of_parts = int(self.file_size // (1024**2)) + 1
-                self.number_of_threads = self.number_of_parts
-                for i in range(0, self.number_of_parts):
-                    self.download_infromation_list[i] = [i * 1024 * 1024, 0, 'pending', -1]
+                # create new list.
+                self.download_infromation_list = [[]] * 64
 
+                self.number_of_parts = 1
+                self.number_of_threads = 1
+                self.download_infromation_list[0] = [0, 0, 'pending', -1]
                 # Set the starting byte number of the remaining parts equal to the size of the file.
                 # The size of the file is equal to the last byte of the file.
                 # The status of these parts is complete. Because we have nothing to download.
                 for i in range(self.number_of_parts, 64):
-                    self.download_infromation_list[i] = [self.file_size, 0, 'complete', -1]
+                    self.download_infromation_list[i] = [0, 0, 'complete', -1]
 
         for i in range(0, self.number_of_parts):
             self.part_thread_dict[i] = None
@@ -398,20 +422,36 @@ class Download():
 
     # this method shows progress bar
     def progressBar(self):
-
-        size, unit = humanReadableSize(self.file_size)
+        if self.file_size:
+            size, unit = humanReadableSize(self.file_size)
+        else:
+            k = 0
+            size = 'None'
+            unt = 'None'
         percent = 0
         while (self.download_status == 'downloading' or self.download_status == 'paused'):
             time.sleep(0.5)
-            percent = (self.downloaded_size / self.file_size) * 100
+            if self.file_size:
+                percent = (self.downloaded_size / self.file_size) * 100
+                converted_downloaded_size = convertSize(self.downloaded_size, unit)
+                show_download_information = (str(round(converted_downloaded_size, 2))
+                                             + '|' + str(size)
+                                             + ' ' + unit)
+                filled_up_Length = int(percent / 2)
+                bar = ('*' * filled_up_Length
+                       + '-' * (50 - filled_up_Length))
 
-            converted_downloaded_size = convertSize(self.downloaded_size, unit)
-            show_download_information = (str(round(converted_downloaded_size, 2))
-                                         + '|' + str(size)
-                                         + ' ' + unit)
-            filled_up_Length = int(percent / 2)
-            bar = ('*' * filled_up_Length
-                   + '-' * (50 - filled_up_Length))
+            else:
+                percent = 0
+                converted_downloaded_size, unit = humanReadableSize(self.downloaded_size)
+                show_download_information = (str(round(converted_downloaded_size, 2))
+                                             + ' ' + unit)
+                bar = list('-' * 50)
+                k += 1
+                if k == 50:
+                    k = 0
+                bar[k] = '*'
+                bar = ''.join(bar)
 
             # find downloded size of every part
             downloaded_size_list_str = ""
@@ -438,16 +478,26 @@ class Download():
             active_connection = self.number_of_threads - self.finished_threads
 
             # delete last line
-            sys.stdout.write(
-                '[%s] %s%s ...%s, %s |connections:%s|ETA:%s\n%s' % (
-                    bar,
-                    int(percent),
-                    '%',
-                    show_download_information,
-                    self.download_speed_str,
-                    active_connection,
-                    self.eta,
-                    downloaded_size_list_str))
+            if self.file_size:
+                sys.stdout.write(
+                    '[%s] %s%s ...%s, %s |connections:%s|ETA:%s\n%s' % (
+                        bar,
+                        int(percent),
+                        '%',
+                        show_download_information,
+                        self.download_speed_str,
+                        active_connection,
+                        self.eta,
+                        downloaded_size_list_str))
+            else:
+                sys.stdout.write(
+                    '[%s] %s%s, %s |connections:%s|\n%s' % (
+                        bar,
+                        ' ',
+                        show_download_information,
+                        self.download_speed_str,
+                        active_connection,
+                        downloaded_size_list_str))
 
             sys.stdout.flush()
 
@@ -530,7 +580,7 @@ class Download():
     def askForNewPart(self):
         self.lock = True
         for i in range(0, self.number_of_parts):
-            # Check that this part is not being downloaded or its download is not complete.
+            # Check that this part is not being downloaded or it is not complete.
             # Check that the number of retries of this part has not reached the set limit.
             if (self.download_infromation_list[i][2] not in ['complete', 'downloading']) and (self.download_infromation_list[i][3] != self.retry):
                 # set 'downloding' status for this part
@@ -566,114 +616,191 @@ class Download():
             self.part_thread_dict[part_number] = thread_number
 
             try:
-                # calculate part size
-                if part_number != (self.number_of_parts - 1):
-                    part_size = self.download_infromation_list[part_number + 1][0] - self.download_infromation_list[part_number][0]
-                else:
-                    part_size = self.file_size - self.download_infromation_list[part_number][0]
+                if self.file_size:
+                    # Calculate part size
+                    # If it's not the last part:
+                    if part_number != (self.number_of_parts - 1):
+                        part_size = self.download_infromation_list[part_number + 1][0] - self.download_infromation_list[part_number][0]
+                    else:
+                        # for last part
+                        part_size = self.file_size - self.download_infromation_list[part_number][0]
 
-                # get start byte number of this part and add it to downloaded size. download resume from this byte number
-                downloaded_part = self.download_infromation_list[part_number][1]
-                start = self.download_infromation_list[part_number][0] + downloaded_part
+                    # get start byte number of this part and add it to downloaded size. download resume from this byte number
+                    downloaded_part = self.download_infromation_list[part_number][1]
 
-                # end of part is equal to start of the next part
-                if part_number != (self.number_of_parts - 1):
-                    end = self.download_infromation_list[part_number + 1][0]
-                else:
-                    end = self.file_size
+                    start = self.download_infromation_list[part_number][0] + downloaded_part
 
-                # specify the start and end of the part for request header.
-                chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
+                    # end of part is equal to start of the next part
+                    if part_number != (self.number_of_parts - 1):
+                        end = self.download_infromation_list[part_number + 1][0]
+                    else:
+                        end = self.file_size
 
-                # request the specified part and get into variable
-                self.requests_session.headers.update(chunk_headers)
-                response = self.requests_session.get(
-                    self.link, allow_redirects=True, stream=True,
-                    timeout=self.timeout)
+                    # download from begining!
+                    if self.resuming_suppurt is False:
+                        start = 0
 
-                # open the file and write the content of the html page
-                # into file.
-                # r+b mode is open the binary file in read or write mode.
-                with open(self.file_path, "r+b") as fp:
+                    # specify the start and end of the part for request header.
+                    chunk_headers = {'Range': 'bytes=%d-%d' % (start, end)}
 
-                    fp.seek(start)
-                    fp.tell()
+                    # request the specified part and get into variable
+                    # When stream=True is set on the request, this avoids
+                    # reading the content at once into memory for large responses
+                    self.requests_session.headers.update(chunk_headers)
+                    response = self.requests_session.get(
+                        self.link, allow_redirects=True, stream=True,
+                        timeout=self.timeout)
 
-                    # why we use iter_content
-                    # Iterates over the response data. When stream=True is set on
-                    # the request, this avoids reading the content at once into
-                    # memory for large responses. The chunk size is the number
-                    # of bytes it should read into memory. This is not necessarily
-                    # the length of each item returned as decoding can take place.
-                    # so we divide our chunk to smaller chunks. default is 100 KiB
-                    python_request_chunk_size = (1024
-                                                 * self.python_request_chunk_size)
-                    for data in response.iter_content(
-                            chunk_size=python_request_chunk_size):
-                        if self.download_status in ['downloading', 'paused']:
+                    # open the file and write the content of the html page
+                    # into file.
+                    # r+b mode is open the binary file in read or write mode.
+                    with open(self.file_path, "r+b") as fp:
 
-                            fp.write(data)
+                        # The seek() method sets the current file position in a file stream.
+                        fp.seek(start)
 
-                            # if this part is download by another thread then exit thread
-                            if self.part_thread_dict[part_number] != thread_number:
-                                # This loop does not end due to an error in the request.
-                                # Therefore, no number should be added to the number of retries.
-                                self.download_infromation_list[part_number][3] -= 1
-                                break
+                        # The Python File tell() method is used to find the current position of
+                        # the file cursor (or pointer) within the file.
+                        fp.tell()
 
-                            # maybe the last chunk is less than default chunk size
-                            if (part_size - downloaded_part) >= python_request_chunk_size:
-                                update_size = python_request_chunk_size
-                                # if update_size is not equal with actual data length,
-                                # then redownload this chunk.
-                                # exit this "for loop" for redownloading this chunk.
-                                if update_size != len(data):
+                        # why we use iter_content
+                        # Iterates over the response data. When stream=True is set on
+                        # the request, this avoids reading the content at once into
+                        # memory for large responses. The chunk size is the number
+                        # of bytes it should read into memory. This is not necessarily
+                        # the length of each item returned as decoding can take place.
+                        # so we divide our chunk to smaller chunks. default is 100 Kib
+                        python_request_chunk_size = (1024
+                                                     * self.python_request_chunk_size)
+                        for data in response.iter_content(
+                                chunk_size=python_request_chunk_size):
+                            if self.download_status in ['downloading', 'paused']:
+                                fp.write(data)
+
+                                # if this part is downloaded by another thread then exit thread
+                                if self.part_thread_dict[part_number] != thread_number:
                                     # This loop does not end due to an error in the request.
                                     # Therefore, no number should be added to the number of retries.
                                     self.download_infromation_list[part_number][3] -= 1
                                     break
 
+                                # maybe the last chunk is less than default chunk size
+                                if (part_size - downloaded_part) >= python_request_chunk_size:
+                                    update_size = python_request_chunk_size
+                                    # if update_size is not equal with actual data length,
+                                    # then redownload this chunk.
+                                    # exit this "for loop" for redownloading this chunk.
+                                    if update_size != len(data):
+                                        # This loop does not end due to an error in the request.
+                                        # Therefore, no number should be added to the number of retries.
+                                        self.download_infromation_list[part_number][3] -= 1
+                                        break
+                                else:
+                                    # so the last small chunk is equal to :
+                                    update_size = (part_size - downloaded_part)
+                                    # some times last chunks are smaller
+                                    if len(data) < update_size:
+                                        update_size = len(data)
+
+                                # update downloaded_part
+                                downloaded_part = (downloaded_part
+                                                   + update_size)
+                                # save value to downloaded_size_list
+                                self.download_infromation_list[part_number][1] = downloaded_part
+
+                                # this variable saves amount of total downloaded size
+                                # update downloaded_size
+                                self.downloaded_size = (self.downloaded_size
+                                                        + update_size)
+                                # perhaps user set limitation for download rate.
+                                # downloadrate limitation
+                                # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
+                                # receiving loop, which reduces the download speed.
+                                time.sleep(self.sleep_for_speed_limiting)
+
+                                if self.download_status == 'paused':
+                                    # wait for unpausing
+                                    while self.download_status == 'paused':
+                                        time.sleep(0.2)
+
                             else:
-                                # so the last small chunk is equal to :
-                                update_size = (part_size - downloaded_part)
-                                # so the last small chunk is equal to :
-                                update_size = (part_size - downloaded_part)
-                                # some times last chunks are smaller
-                                if len(data) < update_size:
-                                    update_size = len(data)
-
-                            # if update_size is not equal with actual data length,
-                            # then redownload this chunk.
-                            # exit this "for loop" for redownloading this chunk.
-                            if update_size != len(data):
-                                # This loop does not end due to an error in the request.
-                                # Therefore, no number should be added to the number of retries.
-                                self.download_infromation_list[part_number][3] -= 1
+                                self.download_infromation_list[part_number][2] = 'stopped'
                                 break
+                # If file_size is unspecified.
+                else:
+                    download_finished_successfully = False
 
-                            # update downloaded_part
-                            downloaded_part = (downloaded_part
-                                               + update_size)
-                            # save value to downloaded_size_list
-                            self.download_infromation_list[part_number][1] = downloaded_part
+                    # get start byte number of this part and add it to downloaded size. download resume from this byte number
+                    start = self.download_infromation_list[part_number][1]
+                    downloaded_part = start
 
-                            # this variable saves amount of total downloaded size
-                            # update downloaded_size
-                            self.downloaded_size = (self.downloaded_size
-                                                    + update_size)
-                            # perhaps user set limitation for download rate.
-                            # downloadrate limitation
-                            # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
-                            # receiving loop, which reduces the download speed.
-                            time.sleep(self.sleep_for_speed_limiting)
+                    # download from begining!
+                    if self.resuming_suppurt is False:
+                        start = 0
 
-                            if self.download_status == 'paused':
-                                # wait for unpausing
-                                while self.download_status == 'paused':
-                                    time.sleep(0.2)
-                        else:
-                            self.download_infromation_list[part_number][2] = 'stopped'
-                            break
+                    # specify the start and end of the part for request header.
+                    chunk_headers = {'Range': 'bytes=%d-' % (start)}
+
+                    # request the specified part and get into variable
+                    # When stream=True is set on the request, this avoids
+                    # reading the content at once into memory for large responses
+                    self.requests_session.headers.update(chunk_headers)
+                    response = self.requests_session.get(
+                        self.link, allow_redirects=True, stream=True,
+                        timeout=self.timeout)
+
+                    # open the file and write the content of the html page
+                    # into file.
+                    # r+b mode is open the binary file in read or write mode.
+                    with open(self.file_path, "r+b") as fp:
+
+                        # The seek() method sets the current file position in a file stream.
+                        fp.seek(start)
+
+                        # The Python File tell() method is used to find the current position of
+                        # the file cursor (or pointer) within the file.
+                        fp.tell()
+
+                        # why we use iter_content
+                        # Iterates over the response data. When stream=True is set on
+                        # the request, this avoids reading the content at once into
+                        # memory for large responses. The chunk size is the number
+                        # of bytes it should read into memory. This is not necessarily
+                        # the length of each item returned as decoding can take place.
+                        # so we divide our chunk to smaller chunks. default is 100 Kib
+                        python_request_chunk_size = (1024
+                                                     * self.python_request_chunk_size)
+                        for data in response.iter_content(
+                                chunk_size=python_request_chunk_size):
+                            if self.download_status in ['downloading', 'paused']:
+                                fp.write(data)
+                                update_size = len(data)
+
+                                # update downloaded_part
+                                downloaded_part = (downloaded_part
+                                                   + update_size)
+                                # save value to downloaded_size_list
+                                self.download_infromation_list[part_number][1] = downloaded_part
+
+                                # this variable saves amount of total downloaded size
+                                # update downloaded_size
+                                self.downloaded_size = (self.downloaded_size
+                                                        + update_size)
+                                # perhaps user set limitation for download rate.
+                                # downloadrate limitation
+                                # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
+                                # receiving loop, which reduces the download speed.
+                                time.sleep(self.sleep_for_speed_limiting)
+
+                                if self.download_status == 'paused':
+                                    # wait for unpausing
+                                    while self.download_status == 'paused':
+                                        time.sleep(0.2)
+
+                            else:
+                                self.download_infromation_list[part_number][2] = 'stopped'
+                                break
+                    download_finished_successfully = True
 
             except Exception as e:
                 self.download_infromation_list[part_number][2] = 'error'
@@ -683,13 +810,22 @@ class Download():
                 sendToLog(error_text)
 
             # so it's complete successfully.
-            if (downloaded_part == part_size):
-                sendToLog('part ' + str(part_number) + ' is complete!')
-                self.download_infromation_list[part_number][2] = 'complete'
-                self.part_thread_dict[part_number] = None
+            if self.file_size:
+                if (downloaded_part == part_size):
+                    sendToLog('part ' + str(part_number) + ' is complete!')
+                    self.download_infromation_list[part_number][2] = 'complete'
+                    self.part_thread_dict[part_number] = None
+                else:
+                    self.download_infromation_list[part_number][2] = 'error'
+                    self.part_thread_dict[part_number] = None
             else:
-                self.download_infromation_list[part_number][2] = 'error'
-                self.part_thread_dict[part_number] = None
+                if download_finished_successfully:
+                    self.file_size = self.downloaded_size
+                    self.download_infromation_list[part_number][2] = 'complete'
+                    self.part_thread_dict[part_number] = None
+                else:
+                    self.download_infromation_list[part_number][2] = 'error'
+                    self.part_thread_dict[part_number] = None
 
         # This thread is finished.
         self.finished_threads = self.finished_threads + 1
@@ -712,9 +848,8 @@ class Download():
 
     # this method runs download threads
     def runDownloadThreads(self):
-
         # check if server supports multithread downloading or not!
-        if self.multiThreadSupport() is False:
+        if self.resuming_suppurt is False:
             self.thread_number = 1
 
         for i in range(0, self.number_of_threads):
@@ -749,14 +884,20 @@ class Download():
               (self.finished_threads != self.number_of_threads):
 
             # Calculate download percent
-            self.download_percent = int((self.downloaded_size / self.file_size) * 100)
+            if self.file_size:
+                self.download_percent = int((self.downloaded_size / self.file_size) * 100)
+            else:
+                self.download_percent = 0
 
             # Calculate number of active threads
             self.number_of_active_connections = self.number_of_threads - self.finished_threads
             time.sleep(1)
 
         # Calculate download percent
-        self.download_percent = int((self.downloaded_size / self.file_size) * 100)
+        if self.file_size:
+            self.download_percent = int((self.downloaded_size / self.file_size) * 100)
+        else:
+            self.download_percent = 0
 
         sendToLog(str(self.finished_threads))
         # If the downloaded size is the same as the file size, then the download has been completed successfully.
@@ -779,25 +920,25 @@ class Download():
 
     # this method starts download
     def start(self):
+        # create new download session.
         self.createSession()
-        file_size = self.getFileSize()
-        if file_size:
-            self.setRetry()
-            self.download_status = 'downloading'
-            self.getFileName()
+        self.getFileSize()
+        self.setRetry()
+        self.download_status = 'downloading'
+        self.resumingSupport()
 
-            self.getFileTag()
+        self.getFileName()
 
-            self.createControlFile()
-            self.definePartSizes()
+        self.getFileTag()
 
-            self.runProgressBar()
+        self.createControlFile()
+        self.definePartSizes()
 
-            self.runDownloadThreads()
+        self.runProgressBar()
 
-            self.checkDownloadProgress()
-        else:
-            self.download_status = 'error'
+        self.runDownloadThreads()
+
+        self.checkDownloadProgress()
         self.close()
 
     def stop(self, signum, frame):
@@ -813,6 +954,9 @@ class Download():
     def tellStatus(self):
         downloded_size, downloaded_size_unit = humanReadableSize(self.downloaded_size)
         file_size, file_size_unit = humanReadableSize(self.file_size)
+
+        if self.eta == '0s':
+            self.eta = ''
 
         # return information in dictionary format
         download_info = {

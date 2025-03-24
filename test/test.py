@@ -142,12 +142,12 @@ if args.referrer:
 if args.number_of_threads:
     number_of_threads = "".join(args.number_of_threads)
 else:
-    number_of_threads = 4
+    number_of_threads = 64
 
 if args.chunk_size:
     chunk_size = "".join(args.chunk_size)
 else:
-    chunk_size = 200
+    chunk_size = 200 
 
 
 if __name__ == '__main__':
