@@ -59,6 +59,7 @@ class Download():
         self.load_cookies = add_link_dictionary['load_cookies']
         self.referer = add_link_dictionary['referer']
         self.proxy_type = add_link_dictionary['proxy_type']
+        self.check_certificate = add_link_dictionary['check_certificate']
         self.number_of_parts = 0
         self.timeout = timeout
         self.retry = retry
@@ -133,7 +134,7 @@ class Download():
     # get file size
     # if file size is not available, then download link is invalid
     def getFileSize(self):
-        response = self.requests_session.head(self.link, allow_redirects=True, timeout=5)
+        response = self.requests_session.head(self.link, allow_redirects=True, timeout=5, verify=self.check_certificate)
         self.file_header = response.headers
 
         # find file size
@@ -649,7 +650,7 @@ class Download():
                     self.requests_session.headers.update(chunk_headers)
                     response = self.requests_session.get(
                         self.link, allow_redirects=True, stream=True,
-                        timeout=self.timeout)
+                        timeout=self.timeout, verify=self.check_certificate)
 
                     # open the file and write the content of the html page
                     # into file.
@@ -747,7 +748,7 @@ class Download():
                     self.requests_session.headers.update(chunk_headers)
                     response = self.requests_session.get(
                         self.link, allow_redirects=True, stream=True,
-                        timeout=self.timeout)
+                        timeout=self.timeout, verify=self.check_certificate)
 
                     # open the file and write the content of the html page
                     # into file.

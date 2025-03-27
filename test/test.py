@@ -78,6 +78,10 @@ parser.add_argument('--referrer', action='store', nargs=1,
                     help='Set an http referrer')
 parser.add_argument('--chunk-size', action='store', nargs=1,
                     help='Chunk size in KiB, Default is 200 KiB')
+
+parser.add_argument('--check-certificate', action='store', nargs=1,
+                    help='Use certificate to verify the peers, Default is yes')
+
 args, unknownargs = parser.parse_known_args()
 
 add_link_dictionary = {'link': None,
@@ -144,10 +148,20 @@ if args.number_of_threads:
 else:
     number_of_threads = 64
 
+if args.check_certificate:
+    check_certificate_out = "".join(args.check_certificate)
+    if check_certificate_out in ['yes', 'true', 'True']:
+
+        add_link_dictionary['check_certificate'] = True
+    else:
+        add_link_dictionary['check_certificate'] = False
+else:
+    add_link_dictionary['check_certificate'] = True
+
 if args.chunk_size:
     chunk_size = "".join(args.chunk_size)
 else:
-    chunk_size = 200 
+    chunk_size = 200
 
 
 if __name__ == '__main__':
