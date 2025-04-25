@@ -134,18 +134,39 @@ class Download():
     # get file size
     # if file size is not available, then download link is invalid
     def getFileSize(self):
-        response = self.requests_session.head(self.link, allow_redirects=True, timeout=5, verify=self.check_certificate)
-        self.file_header = response.headers
-
-        # find file size
+        error_message = None
+        error_message2 = None
         try:
+            # get headers
+            self.file_header = {}
+            response = self.requests_session.head(self.link, allow_redirects=True, timeout=5, verify=self.check_certificate)
+            self.file_header = response.headers
+
+            # find file size
             self.file_size = int(self.file_header['content-length'])
+        except requests.exceptions.HTTPError as error:
+            error_message = 'HTTP error'
+            error_message2 = str(error)
+        except requests.exceptions.ConnectionError as error:
+            error_message = 'Connection error'
+            error_message2 = str(error)
+        except requests.exceptions.Timeout as error:
+            error_message = 'Timeout error'
+            error_message2 = str(error)
+        except requests.exceptions.RequestException as error:
+            error_message = 'Request error'
+            error_message2 = str(error)
         except Exception as error:
-            sendToLog(str(error), 'ERROR')
-            print("File size is not specified!")
+            error_message = 'Error'
+            error_message2 = str(error)
+
+        if error_message:
+            error = error_message + ' - ' + error_message2
+            print(error)
+            sendToLog(error, 'ERROR')
             self.file_size = None
 
-        return self.file_size
+        return self.file_header
 
     def setRetry(self):
         # set retry numbers.
@@ -923,24 +944,29 @@ class Download():
     def start(self):
         # create new download session.
         self.createSession()
-        self.getFileSize()
-        self.setRetry()
-        self.download_status = 'downloading'
-        self.resumingSupport()
+        header = self.getFileSize()
+        if header != {}:
+            self.setRetry()
+            self.download_status = 'downloading'
+            self.resumingSupport()
 
-        self.getFileName()
+            self.getFileName()
 
-        self.getFileTag()
+            self.getFileTag()
 
-        self.createControlFile()
-        self.definePartSizes()
+            self.createControlFile()
+            self.definePartSizes()
 
-        self.runProgressBar()
+            self.runProgressBar()
 
-        self.runDownloadThreads()
+            self.runDownloadThreads()
 
-        self.checkDownloadProgress()
-        self.close()
+            self.checkDownloadProgress()
+            self.close()
+
+        else:
+            self.download_status = 'error'
+            self.close()
 
     def stop(self, signum, frame):
         self.download_status = 'stopped'
