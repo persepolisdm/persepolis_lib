@@ -701,7 +701,6 @@ class Download():
                                         # This loop does not end due to an error in the request.
                                         # Therefore, no number should be added to the number of retries.
                                         self.download_infromation_list[part_number][3] -= 1
-                                        is_break = True
                                         break
                                 else:
                                     # so the last small chunk is equal to :
