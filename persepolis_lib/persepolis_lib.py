@@ -90,8 +90,7 @@ class Download():
         if self.ip:
             ip_port = '://' + str(self.ip) + ":" + str(self.port)
             if self.proxy_user:
-                ip_port = ('://' + self.proxy_user + ':'
-                           + self.proxy_passwd + '@' + ip_port)
+                ip_port = ('://' + self.proxy_user + ':' + self.proxy_passwd + '@' + ip_port)
             if self.proxy_type == 'socks5':
                 ip_port = 'socks5' + ip_port
             else:
@@ -162,7 +161,6 @@ class Download():
 
         if error_message:
             error = error_message + ' - ' + error_message2
-            print(error)
             sendToLog(error, 'ERROR')
             self.file_size = None
 
@@ -383,7 +381,7 @@ class Download():
 
                 else:
                     # Calculate how many parts of one MiB we need.
-                    self.number_of_parts = int(self.file_size // (1024**2)) + 1
+                    self.number_of_parts = int((self.file_size - 1) // (1024**2)) + 1
                     self.number_of_threads = self.number_of_parts
                     for i in range(0, self.number_of_parts):
                         self.download_infromation_list[i] = [i * 1024 * 1024, 0, 'pending', -1]
@@ -392,7 +390,7 @@ class Download():
                     # The size of the file is equal to the last byte of the file.
                     # The status of these parts is complete. Because we have nothing to download.
                     for i in range(self.number_of_parts, 64):
-                        self.download_infromation_list[i] = [self.file_size, 0, 'complete', -1]
+                        self.download_infromation_list[i] = [self.file_size - 1, 0, 'complete', -1]
             else:
                 # create new list.
                 self.download_infromation_list = [[]] * 64
@@ -424,13 +422,11 @@ class Download():
                 diffrence_size, 'speed')
             download_speed = round(diffrence_size_converted / diffrence_time,
                                    2)
-            self.download_speed_str = (str(download_speed)
-                                       + " " + speed_unit + "/s")
+            self.download_speed_str = (str(download_speed) + " " + speed_unit + "/s")
             not_converted_download_speed = diffrence_size / diffrence_time
             try:
                 # estimated time the download will be completed.
-                eta_second = (self.file_size
-                              - self.downloaded_size) /\
+                eta_second = (self.file_size - self.downloaded_size) /\
                     not_converted_download_speed
             except Exception:
                 eta_second = 0
@@ -449,25 +445,20 @@ class Download():
         else:
             k = 0
             size = 'None'
-            unt = 'None'
         percent = 0
         while (self.download_status == 'downloading' or self.download_status == 'paused'):
             time.sleep(0.5)
             if self.file_size:
                 percent = (self.downloaded_size / self.file_size) * 100
                 converted_downloaded_size = convertSize(self.downloaded_size, unit)
-                show_download_information = (str(round(converted_downloaded_size, 2))
-                                             + '|' + str(size)
-                                             + ' ' + unit)
+                show_download_information = (str(round(converted_downloaded_size, 2)) + '|' + str(size) + ' ' + unit)
                 filled_up_Length = int(percent / 2)
-                bar = ('*' * filled_up_Length
-                       + '-' * (50 - filled_up_Length))
+                bar = ('*' * filled_up_Length + '-' * (50 - filled_up_Length))
 
             else:
                 percent = 0
                 converted_downloaded_size, unit = humanReadableSize(self.downloaded_size)
-                show_download_information = (str(round(converted_downloaded_size, 2))
-                                             + ' ' + unit)
+                show_download_information = (str(round(converted_downloaded_size, 2)) + ' ' + unit)
                 bar = list('-' * 50)
                 k += 1
                 if k == 50:
@@ -482,13 +473,7 @@ class Download():
                     part_size_converted, unit_part_size = humanReadableSize(
                         self.download_infromation_list[i][1])
                     downloaded_size_list_str = (
-                        downloaded_size_list_str
-                        + "part "
-                        + str(i + 1)
-                        + ": "
-                        + str(part_size_converted)
-                        + unit_part_size
-                        + "|")
+                        downloaded_size_list_str + "part " + str(i + 1) + ": " + str(part_size_converted) + unit_part_size + "|")
                     if i in list(range(3, 64, 4)):
                         downloaded_size_list_str = downloaded_size_list_str + '\n'
                 downloaded_size_list_str = downloaded_size_list_str + "\n"
@@ -538,15 +523,12 @@ class Download():
                 '[%s] %s%s ...%s, %s   \r' % ('Download complete!',
                                               int(100),
                                               '%',
-                                              ('|' + str(size)
-                                                   + ' ' + unit),
+                                              ('|' + str(size) + ' ' + unit),
                                               self.file_path))
             sys.stdout.flush()
 
         elif self.download_status == 'stopped':
-            show_download_information = (str(round(converted_downloaded_size, 2))
-                                         + '|' + str(size)
-                                         + ' ' + unit)
+            show_download_information = (str(round(converted_downloaded_size, 2)) + '|' + str(size) + ' ' + unit)
             # cursor up one line
             sys.stdout.write('\x1b[1A')
             # delete last line
@@ -561,9 +543,7 @@ class Download():
             sys.stdout.flush()
 
         elif self.download_status == 'error':
-            show_download_information = (str(round(converted_downloaded_size, 2))
-                                         + '|' + str(size)
-                                         + ' ' + unit)
+            show_download_information = (str(round(converted_downloaded_size, 2)) + '|' + str(size) + ' ' + unit)
             # cursor up one line
             sys.stdout.write('\x1b[1A')
             # delete last line
@@ -604,26 +584,29 @@ class Download():
         for i in range(0, self.number_of_parts):
             # Check that this part is not being downloaded or it is not complete.
             # Check that the number of retries of this part has not reached the set limit.
-            if (self.download_infromation_list[i][2] not in ['complete', 'downloading']) and (self.download_infromation_list[i][3] != self.retry):
+            if (self.download_infromation_list[i][2] != 'complete') and (self.download_infromation_list[i][2] != 'downloading') and\
+                    (self.download_infromation_list[i][3] <= self.retry):
+
                 # set 'downloding' status for this part
                 self.download_infromation_list[i][2] = 'downloading'
                 # add 1 to retry number for this part
                 self.download_infromation_list[i][3] += 1
-                break
 
-            # no part found
-            if i == self.number_of_parts:
-                i = None
+                # number of retries can't be less than 0
+                if self.download_infromation_list[i][3] < 0:
+                    self.download_infromation_list[i][3] = 0
+                self.lock = False
+                return i
 
         self.lock = False
-        return i
+        return None
 
     # The below code is used for each chunk of file handled
     # by each thread for downloading the content from specified
     # location to storage
     def threadHandler(self, thread_number):
         while self.download_status in ['downloading', 'paused']:
-
+            is_break = False
             # Wait for the lock to be released.
             while self.lock is True:
                 # Random sleep prevents two threads from downloading the same part at the same time.
@@ -633,6 +616,7 @@ class Download():
 
             # If part_number is None, no part is available for download. So exit the loop.
             if part_number is None:
+                is_break = True
                 break
 
             self.part_thread_dict[part_number] = thread_number
@@ -643,9 +627,10 @@ class Download():
                     # If it's not the last part:
                     if part_number != (self.number_of_parts - 1):
                         part_size = self.download_infromation_list[part_number + 1][0] - self.download_infromation_list[part_number][0]
+
                     else:
                         # for last part
-                        part_size = self.file_size - self.download_infromation_list[part_number][0]
+                        part_size = self.file_size - 1 - self.download_infromation_list[part_number][0]
 
                     # get start byte number of this part and add it to downloaded size. download resume from this byte number
                     downloaded_part = self.download_infromation_list[part_number][1]
@@ -654,9 +639,9 @@ class Download():
 
                     # end of part is equal to start of the next part
                     if part_number != (self.number_of_parts - 1):
-                        end = self.download_infromation_list[part_number + 1][0]
+                        end = self.download_infromation_list[part_number + 1][0] - 1
                     else:
-                        end = self.file_size
+                        end = self.file_size - 1
 
                     # download from begining!
                     if self.resuming_suppurt is False:
@@ -692,8 +677,7 @@ class Download():
                         # of bytes it should read into memory. This is not necessarily
                         # the length of each item returned as decoding can take place.
                         # so we divide our chunk to smaller chunks. default is 100 Kib
-                        python_request_chunk_size = (1024
-                                                     * self.python_request_chunk_size)
+                        python_request_chunk_size = (1024 * self.python_request_chunk_size)
                         for data in response.iter_content(
                                 chunk_size=python_request_chunk_size):
                             if self.download_status in ['downloading', 'paused']:
@@ -704,6 +688,7 @@ class Download():
                                     # This loop does not end due to an error in the request.
                                     # Therefore, no number should be added to the number of retries.
                                     self.download_infromation_list[part_number][3] -= 1
+                                    is_break = True
                                     break
 
                                 # maybe the last chunk is less than default chunk size
@@ -716,6 +701,7 @@ class Download():
                                         # This loop does not end due to an error in the request.
                                         # Therefore, no number should be added to the number of retries.
                                         self.download_infromation_list[part_number][3] -= 1
+                                        is_break = True
                                         break
                                 else:
                                     # so the last small chunk is equal to :
@@ -725,15 +711,13 @@ class Download():
                                         update_size = len(data)
 
                                 # update downloaded_part
-                                downloaded_part = (downloaded_part
-                                                   + update_size)
+                                downloaded_part = (downloaded_part + update_size)
                                 # save value to downloaded_size_list
                                 self.download_infromation_list[part_number][1] = downloaded_part
 
                                 # this variable saves amount of total downloaded size
                                 # update downloaded_size
-                                self.downloaded_size = (self.downloaded_size
-                                                        + update_size)
+                                self.downloaded_size = (self.downloaded_size + update_size)
                                 # perhaps user set limitation for download rate.
                                 # downloadrate limitation
                                 # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
@@ -747,6 +731,7 @@ class Download():
 
                             else:
                                 self.download_infromation_list[part_number][2] = 'stopped'
+                                is_break = True
                                 break
                 # If file_size is unspecified.
                 else:
@@ -790,8 +775,7 @@ class Download():
                         # of bytes it should read into memory. This is not necessarily
                         # the length of each item returned as decoding can take place.
                         # so we divide our chunk to smaller chunks. default is 100 Kib
-                        python_request_chunk_size = (1024
-                                                     * self.python_request_chunk_size)
+                        python_request_chunk_size = (1024 * self.python_request_chunk_size)
                         for data in response.iter_content(
                                 chunk_size=python_request_chunk_size):
                             if self.download_status in ['downloading', 'paused']:
@@ -799,15 +783,13 @@ class Download():
                                 update_size = len(data)
 
                                 # update downloaded_part
-                                downloaded_part = (downloaded_part
-                                                   + update_size)
+                                downloaded_part = (downloaded_part + update_size)
                                 # save value to downloaded_size_list
                                 self.download_infromation_list[part_number][1] = downloaded_part
 
                                 # this variable saves amount of total downloaded size
                                 # update downloaded_size
-                                self.downloaded_size = (self.downloaded_size
-                                                        + update_size)
+                                self.downloaded_size = (self.downloaded_size + update_size)
                                 # perhaps user set limitation for download rate.
                                 # downloadrate limitation
                                 # "Speed limit" is whole number. The more it is, the more sleep time is given to the data
@@ -821,14 +803,13 @@ class Download():
 
                             else:
                                 self.download_infromation_list[part_number][2] = 'stopped'
+                                is_break = True
                                 break
                     download_finished_successfully = True
 
             except Exception as e:
                 self.download_infromation_list[part_number][2] = 'error'
-                error_text = ("part_number: "
-                              + str(part_number)
-                              + " " + str(e))
+                error_text = ("part_number: " + str(part_number) + " " + str(e))
                 sendToLog(error_text)
 
             # so it's complete successfully.
@@ -837,7 +818,7 @@ class Download():
                     sendToLog('part ' + str(part_number) + ' is complete!')
                     self.download_infromation_list[part_number][2] = 'complete'
                     self.part_thread_dict[part_number] = None
-                else:
+                elif not (is_break):
                     self.download_infromation_list[part_number][2] = 'error'
                     self.part_thread_dict[part_number] = None
             else:
@@ -845,7 +826,7 @@ class Download():
                     self.file_size = self.downloaded_size
                     self.download_infromation_list[part_number][2] = 'complete'
                     self.part_thread_dict[part_number] = None
-                else:
+                elif not (is_break):
                     self.download_infromation_list[part_number][2] = 'error'
                     self.part_thread_dict[part_number] = None
 
@@ -902,7 +883,7 @@ class Download():
     # this method checks and manages download progress.
     def checkDownloadProgress(self):
         # Run this loop until the download is finished.
-        while (self.file_size != self.downloaded_size) and (self.download_status == 'downloading' or self.download_status == 'paused') and \
+        while (self.download_status == 'downloading' or self.download_status == 'paused') and \
               (self.finished_threads != self.number_of_threads):
 
             # Calculate download percent
@@ -915,17 +896,22 @@ class Download():
             self.number_of_active_connections = self.number_of_threads - self.finished_threads
             time.sleep(1)
 
+            # Check if all parts downloaded completely.
+            number_of_completed_parts = 0
+            for i in range(0, self.number_of_parts):
+                if self.download_infromation_list[i][2] == 'complete':
+                    number_of_completed_parts += 1
+            if number_of_completed_parts == self.number_of_parts:
+                # Download complete!
+                self.download_status = 'complete'
+
         # Calculate download percent
         if self.file_size:
             self.download_percent = int((self.downloaded_size / self.file_size) * 100)
         else:
             self.download_percent = 0
 
-        sendToLog(str(self.finished_threads))
-        # If the downloaded size is the same as the file size, then the download has been completed successfully.
-        if self.file_size == self.downloaded_size:
-
-            self.download_status = 'complete'
+        if self.download_status == 'complete':
             sendToLog('Download complete.')
 
         # If the download is not complete and the user has not stopped the download, then the download has encountered an error.
