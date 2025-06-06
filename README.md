@@ -43,12 +43,13 @@ segments = 64
 pytho_requests_chunk_size = 100 # KiB
 
 # create a download session
-# set timeout value in seconds. default is 5.
+# set timeout value in seconds. default is 10.
 # set number of retries if download failed. default is 5.
+# set time for waiting between retries. default is 5.
 # set progress_bar value to True If you want the progress bar to be shown in the console. default is False
 # set threads_progress_bar to True If you want the size downloaded by each thread to be displayed in the progress bar. default is False.
 download_session = Download(add_link_dictionary=download_dict, number_of_threads=segments,
-                             chunk_size=pytho_requests_chunk_size, timeout=5, retry=5, progress_bar=False, threads_progress_bar=False)
+                             chunk_size=pytho_requests_chunk_size, timeout=10, retry=5, retry_wait=5, progress_bar=False, threads_progress_bar=False)
 # start download. Use thread if you want!
 download_session.start()
 

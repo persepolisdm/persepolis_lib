@@ -29,7 +29,7 @@ from urllib3.util.retry import Retry
 
 class Download():
     def __init__(self, add_link_dictionary, number_of_threads=64,
-                 python_request_chunk_size=100, timeout=5, retry=5, progress_bar=False, threads_progress_bar=False):
+                 python_request_chunk_size=100, timeout=10, retry=5, retry_wait=5, progress_bar=False, threads_progress_bar=False):
         self.python_request_chunk_size = python_request_chunk_size
         self.progress_bar = progress_bar
         self.threads_progress_bar = threads_progress_bar
@@ -63,6 +63,7 @@ class Download():
         self.number_of_parts = 0
         self.timeout = timeout
         self.retry = retry
+        self.retry_wait = retry_wait
         self.lock = False
         self.sleep_for_speed_limiting = 0
         self.not_converted_download_speed = 0
@@ -169,8 +170,13 @@ class Download():
     def setRetry(self):
         # set retry numbers.
         # backoff_factor will help to apply delays between attempts to avoid failing again
-        retry = Retry(connect=self.retry, backoff_factor=1)
-        adapter = HTTPAdapter(max_retries=retry)
+        retry_strategy = Retry(
+            total=self.retry,
+            backoff_factor=self.retry_wait,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
         self.requests_session.mount('http://', adapter)
         self.requests_session.mount('https://', adapter)
 
