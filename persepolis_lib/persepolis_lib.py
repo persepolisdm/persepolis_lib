@@ -20,7 +20,7 @@ import random
 import threading
 import os
 import errno
-from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog, convertHeaderToDictionary, readCookieJar, getFileNameFromLink
+from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog, convertHeaderToDictionary, readCookieJar, getFileNameFromLink, freeSpace
 import sys
 import json
 from requests.adapters import HTTPAdapter
@@ -344,9 +344,51 @@ class Download():
 
             # if file_size is specified, create an empty file with file_size
             if self.file_size:
-                fp.write(b'\0' * self.file_size)
+                # check for free space
+                free_space = freeSpace(self.download_path)
+
+                if free_space is not None:
+
+                    # compare free disk space and file_size
+                    if free_space >= self.file_size:
+                        size, unit = humanReadableSize(self.file_size)
+                        print('Please wait! ' + self.download_status + '. File size: ' + str(size) + str(unit))
+                        # sets the size of each chunk to 1MiB
+                        CHUNK_SIZE = (1024 ** 2)
+                        # creates a byte string of zeroes with a size of 1MiB.
+                        # These bytes will be used for writing to the file later.
+                        zero_chunk = b'\0' * CHUNK_SIZE
+                        # This variable indicates how many bytes still need to be written.
+                        remaining = self.file_size
+
+                        # continue the loop until writing ends.
+                        while remaining > 0 and self.download_status != 'stopped':
+                            # determines how much data should be written in this iteration.
+                            # This value can be equal to CHUNK_SIZE,
+                            # but if remaining is less than CHUNK_SIZE, only the remaining amount will be written.
+                            to_write = min(CHUNK_SIZE, remaining)
+
+                            # writes the zero data up to the calculated amount (to_write) to the file.
+                            fp.write(zero_chunk[:to_write])
+                            # updates the remaining amount to indicate how much of the file still needs to be written.
+                            remaining -= to_write
+
+                        if self.download_status != 'stopped':
+                            print('Empty file has been created!')
+                        else:
+                            # Download canceled by user! Delete unfinished empty file.
+                            fp.close()
+                            os.remove(self.file_path)
+                            return False
+                    else:
+                        print('Insufficient disk space!')
+                        fp.close()
+                        return False
 
             fp.close()
+            return True
+        else:
+            return True
 
     def definePartSizes(self):
         # download_infromation_list contains 64 lists.
@@ -938,21 +980,27 @@ class Download():
         header = self.getFileSize()
         if header != {}:
             self.setRetry()
-            self.download_status = 'downloading'
+            self.download_status = 'creating download file'
             self.resumingSupport()
 
             self.getFileName()
 
             self.getFileTag()
 
-            self.createControlFile()
-            self.definePartSizes()
+            enough_free_space = self.createControlFile()
+            if self.download_status != 'stopped':
+                self.download_status = 'downloading'
+                if enough_free_space:
+                    self.definePartSizes()
 
-            self.runProgressBar()
+                    self.runProgressBar()
 
-            self.runDownloadThreads()
+                    self.runDownloadThreads()
 
-            self.checkDownloadProgress()
+                    self.checkDownloadProgress()
+                else:
+                    self.download_status = 'error'
+
             self.close()
 
         else:

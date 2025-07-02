@@ -137,3 +137,22 @@ def getFileNameFromLink(link):
     file_name = Path(parsed_linkd.path).name
 
     return file_name
+
+
+# this function checks free space in hard disk.
+def freeSpace(dir):
+    try:
+        import psutil
+    except:
+        print('psutil is not installed!')
+        return None
+
+    try:
+        dir_space = psutil.disk_usage(dir)
+        free_space = dir_space.free
+        return int(free_space)
+
+    except Exception as e:
+        # log in to the log file
+        print('persepolis couldn\'t find free space value:\n' + str(e))
+        return None
