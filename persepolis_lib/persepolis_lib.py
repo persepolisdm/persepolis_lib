@@ -375,6 +375,8 @@ class Download():
 
                         if self.download_status != 'stopped':
                             print('Empty file has been created!')
+                            fp.close()
+                            return True
                         else:
                             # Download canceled by user! Delete unfinished empty file.
                             fp.close()
@@ -384,9 +386,12 @@ class Download():
                         print('Insufficient disk space!')
                         fp.close()
                         return False
-
-            fp.close()
-            return True
+                else:
+                    fp.close()
+                    return False
+            else:
+                fp.close()
+                return True
         else:
             return True
 
