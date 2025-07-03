@@ -12,6 +12,7 @@ dependencies = [
   "requests",
   "urllib3",
   "pysocks",
+  "psutil",
 ]
 requires-python = ">=3.5"
 authors = [
