@@ -20,7 +20,7 @@ import random
 import threading
 import os
 import errno
-from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog, convertHeaderToDictionary, readCookieJar, getFileNameFromLink, freeSpace
+from persepolis_lib.useful_tools import convertTime, humanReadableSize, convertSize, sendToLog, convertHeaderToDictionary, readCookieJar, getFileNameFromLink, freeSpace, returnNewFileName
 import sys
 import json
 from requests.adapters import HTTPAdapter
@@ -40,7 +40,7 @@ class Download():
         self.download_speed_str = "0"
         self.__Version__ = "1.1.1"
 
-        # download_status can be in waiting, downloading, stop, error, paused
+        # download_status can be in waiting, downloading, stop, error, paused, creating download file
         self.download_status = 'waiting'
         self.file_name = '***'
         self.file_size = 0
@@ -244,6 +244,10 @@ class Download():
             self.file_path = self.file_name
             self.control_json_file_path = control_json_file
 
+        # If we have diffrent files but with same name, So
+        # this fle must be renamed.
+        rename = False
+
         # create json control file if not created before
         try:
             with open(self.control_json_file_path, 'x') as f:
@@ -299,13 +303,14 @@ class Download():
 
                         # check if the download is duplicated
                         # If download item is duplicated, so resume download
-                        # check ETag
+                        # check ETag, Else rename file
                         if 'ETag' in data_dict:
 
                             if data_dict['ETag'] == self.etag:
                                 self.resume = True
                             else:
                                 self.resume = False
+                                rename = True
 
                         # if ETag is not available, then check file size
                         elif 'file_size' in data_dict:
@@ -314,11 +319,14 @@ class Download():
                                 self.resume = True
                             else:
                                 self.resume = False
+                                rename = True
                         else:
                             self.resume = False
+                            rename = True
 
                     # control file is corrupted.
-                    except Exception:
+                    except Exception as e:
+                        print(str(e))
                         self.resume = False
 
         if self.resuming_suppurt is False:
@@ -329,6 +337,31 @@ class Download():
             download_file_existance = True
         else:
             download_file_existance = False
+
+        # If download file not exists so we can rewrite .persepolis file
+        # Else download file name and json file name must be renamed.
+        if rename and download_file_existance:
+            download_file_existance = False
+            # create new file name
+            self.file_name = returnNewFileName(self.download_path, self.file_name)
+
+            # create new name for json file
+            control_json_file = self.file_name + '.persepolis'
+
+            # create new file path
+            self.file_path = os.path.join(self.download_path, self.file_name)
+
+            # create new control file path
+            self.control_json_file_path = os.path.join(
+                self.download_path, control_json_file)
+
+            # create json control file
+            try:
+                with open(self.control_json_file_path, 'x') as f:
+                    f.write("")
+            except Exception as e:
+                print(str(e))
+                self.resume = False
 
         if self.resume and not (download_file_existance):
             self.resume = False
