@@ -28,6 +28,8 @@ from urllib3.util.retry import Retry
 
 
 class Download():
+    version = '1.1.2'
+
     def __init__(self, add_link_dictionary, number_of_threads=64,
                  python_request_chunk_size=100, timeout=10, retry=5, retry_wait=5, progress_bar=False, threads_progress_bar=False):
         self.python_request_chunk_size = python_request_chunk_size
@@ -38,7 +40,6 @@ class Download():
         self.eta = "0"
         self.resume = False
         self.download_speed_str = "0"
-        self.__Version__ = "1.1.1"
 
         # download_status can be in waiting, downloading, stop, error, paused, creating download file
         self.download_status = 'waiting'
@@ -82,6 +83,11 @@ class Download():
         # this dictionary contains information about each part is downloaded by which thread.
         self.part_thread_dict = {}
 
+    # return persepolis_lib version
+    @classmethod
+    def __Version__(cls):
+        return cls.version
+
     # create requests session
     def createSession(self):
         # define a requests session
@@ -120,7 +126,7 @@ class Download():
             self.requests_session.headers.update(
                 {'user-agent': self.user_agent})
         else:
-            self.user_agent = 'Persepolis lib/' + self.__Version__
+            self.user_agent = 'Persepolis lib/' + self.version
             # setting user_agent to the session
             self.requests_session.headers.update(
                 {'user-agent': self.user_agent})

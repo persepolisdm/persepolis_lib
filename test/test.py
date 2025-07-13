@@ -45,7 +45,7 @@ from persepolis_lib.persepolis_lib import Download
 parser = argparse.ArgumentParser(
     description='Persepolis command line download utility')
 parser.add_argument('--version',
-                    action='version', version='Persepolis CMD 1.1.0')
+                    action='version', version='Persepolis lib: ' + Download.__Version__())
 parser.add_argument('--link',
                     action='store', nargs=1,
                     help='Download link.(Use "" for links)')
